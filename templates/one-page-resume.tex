@@ -1,0 +1,110 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% ONE-PAGE RESUME TEMPLATE - Job Application Autopilot Pro
+% GUARANTEED 1 PAGE via compiler sizing profiles.
+% 
+% NOTE: This template is compiled with XeLaTeX.
+% The PDF compiler replaces sizing placeholders like {{FONT_SIZE}}.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\documentclass[{{FONT_SIZE}}pt,letterpaper]{article}
+
+% Page layout (auto-tuned)
+\usepackage[
+  top={{TOP_MARGIN}}in,
+  bottom={{BOTTOM_MARGIN}}in,
+  left={{SIDE_MARGIN}}in,
+  right={{SIDE_MARGIN}}in
+]{geometry}
+
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{parskip}
+\usepackage{setspace}
+
+\pagestyle{empty}
+
+% Colors
+\definecolor{headerblue}{RGB}{0, 51, 102}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=headerblue,
+  urlcolor=headerblue,
+  pdftitle={Rami Abdelrazzaq - {{JOB_TITLE}} - Resume},
+  pdfauthor={Rami Abdelrazzaq}
+}
+
+\titleformat{\section}
+  {\fontsize{ {{SECTION_FONT_SIZE}} }{ {{SECTION_LINE_HEIGHT}} }\selectfont\bfseries\color{headerblue}}
+  {}
+  {0em}
+  {}
+  [\vspace{-0.6em}\textcolor{headerblue}{\rule{\linewidth}{0.8pt}}\vspace{-0.3em}]
+\titlespacing*{\section}{0pt}{ {{SECTION_SPACE_BEFORE}}em }{ {{SECTION_SPACE_AFTER}}em }
+
+\setstretch{ {{LINE_SPACING}} }
+
+\setlist[itemize]{
+  leftmargin=1.4em,
+  itemsep={{ITEM_SEP}}pt,
+  parsep=0pt,
+  topsep={{LIST_TOP_SEP}}pt
+}
+
+\newcommand{\resumeItem}[1]{\item \small{#1}}
+\newcommand{\experienceEntry}[4]{%
+  \noindent\textbf{#1} \hfill \textit{#2}\\
+  \textit{#3} \hfill #4
+}
+
+\begin{document}
+
+% Header
+\begin{center}
+  {\fontsize{ {{NAME_FONT_SIZE}} }{ {{NAME_LINE_HEIGHT}} }\selectfont\bfseries\color{headerblue} Rami Abdelrazzaq}\\[0.2em]
+  {\small {{LOCATION}} \;|\; {{EMAIL}} \;|\; {{PHONE}}}\\[0.1em]
+  {\small \href{https://linkedin.com/in/{{LINKEDIN}}}{linkedin.com/in/{{LINKEDIN}}} \;|\;
+  \href{https://github.com/{{GITHUB}}}{github.com/{{GITHUB}}}}
+\end{center}
+
+\vspace{ {{HEADER_SPACE}}em }
+
+% Summary
+\section{Summary}
+{{SUMMARY}}
+
+% Skills
+\section{Skills}
+\begin{itemize}
+  \resumeItem{\textbf{Product/TPM:} {{SKILL_PRODUCT}}}
+  \resumeItem{\textbf{AI/Automation:} {{SKILL_AI}}}
+  \resumeItem{\textbf{Tools:} {{SKILL_TOOLS}}}
+\end{itemize}
+
+% Experience
+\section{Experience}
+{{EXPERIENCE_SECTION}}
+
+% Projects (optional but recommended)
+\section{Projects}
+{{PROJECTS_SECTION}}
+
+% Education
+\section{Education}
+\experienceEntry{ {{EDU_DEGREE}} }{ {{EDU_DATE}} }{ {{EDU_SCHOOL}} }{ {{EDU_LOCATION}} }
+\begin{itemize}
+  \resumeItem{ {{EDU_DETAILS}} }
+\end{itemize}
+
+% Certifications
+\section{Certifications}
+\begin{itemize}
+  \resumeItem{ {{CERTIFICATIONS}} }
+\end{itemize}
+
+\end{document}
