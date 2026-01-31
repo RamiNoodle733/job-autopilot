@@ -113,12 +113,19 @@ class LinkedInAutoApply {
                 '--disable-setuid-sandbox',
                 '--disable-blink-features=AutomationControlled',
                 '--disable-infobars',
-                '--window-size=1366,768'
+                '--window-size=1366,768',
+                '--disable-gpu',
+                '--disable-dev-shm-usage'
             ],
-            defaultViewport: { width: 1366, height: 768 }
+            defaultViewport: { width: 1366, height: 768 },
+            timeout: 60000
         });
         
         this.page = await this.browser.newPage();
+        
+        // Set longer default timeout
+        this.page.setDefaultTimeout(60000);
+        this.page.setDefaultNavigationTimeout(60000);
         
         // Set user agent to avoid detection
         await this.page.setUserAgent(
@@ -162,19 +169,45 @@ class LinkedInAutoApply {
      * Check if currently logged in
      */
     async checkLoginStatus() {
-        await this.page.goto('https://www.linkedin.com/feed/', { 
-            waitUntil: 'networkidle2',
-            timeout: 30000 
-        });
-        
-        const isLoggedIn = await this.page.evaluate(() => {
-            return !document.querySelector('.sign-in-form') && 
-                   !window.location.href.includes('/login') &&
-                   !window.location.href.includes('/authwall');
-        });
-        
-        this.isLoggedIn = isLoggedIn;
-        return isLoggedIn;
+        try {
+            // First check current URL
+            const currentUrl = this.page.url();
+            if (currentUrl.includes('/login') || currentUrl.includes('/authwall')) {
+                this.isLoggedIn = false;
+                return false;
+            }
+            
+            // If already on feed or jobs, check for login indicators
+            if (currentUrl.includes('/feed') || currentUrl.includes('/jobs')) {
+                const isLoggedIn = await this.page.evaluate(() => {
+                    return !document.querySelector('.sign-in-form') && 
+                           !document.querySelector('form[class*="login"]');
+                });
+                this.isLoggedIn = isLoggedIn;
+                return isLoggedIn;
+            }
+            
+            // Navigate to feed to verify login
+            await this.page.goto('https://www.linkedin.com/feed/', { 
+                waitUntil: 'networkidle2',
+                timeout: 30000 
+            });
+            
+            // Wait for page to settle
+            await this.delay(2000);
+            
+            const finalUrl = this.page.url();
+            const isLoggedIn = !finalUrl.includes('/login') && 
+                               !finalUrl.includes('/authwall') &&
+                               !finalUrl.includes('/checkpoint');
+            
+            this.isLoggedIn = isLoggedIn;
+            return isLoggedIn;
+        } catch (error) {
+            console.log('  ⚠️  Error checking login status:', error.message);
+            this.isLoggedIn = false;
+            return false;
+        }
     }
     
     /**
@@ -183,44 +216,58 @@ class LinkedInAutoApply {
     async login(email, password) {
         console.log('\n🔐 LinkedIn Login Required');
         
-        await this.page.goto('https://www.linkedin.com/login', {
-            waitUntil: 'networkidle2'
-        });
-        
-        // Fill email
-        await this.page.waitForSelector('#username');
-        await this.page.type('#username', email, { delay: TYPING_DELAY });
-        
-        // Fill password
-        await this.page.type('#password', password, { delay: TYPING_DELAY });
-        
-        // Click sign in
-        await this.page.click('.login__form_action_container button');
-        
-        // Wait for navigation or challenge
-        console.log('  ⏳ Waiting for login...');
-        console.log('  ⚠️  If prompted, complete CAPTCHA or 2FA manually');
-        
         try {
-            await this.page.waitForNavigation({ 
-                waitUntil: 'networkidle2', 
-                timeout: 120000 // 2 minutes for manual verification
+            await this.page.goto('https://www.linkedin.com/login', {
+                waitUntil: 'networkidle2',
+                timeout: 30000
             });
-        } catch (e) {
-            // May have navigated already
+            
+            // Wait for form
+            await this.page.waitForSelector('#username', { timeout: 10000 });
+            
+            // Clear and fill email
+            await this.page.click('#username', { clickCount: 3 });
+            await this.page.type('#username', email, { delay: TYPING_DELAY });
+            
+            // Clear and fill password
+            await this.page.click('#password', { clickCount: 3 });
+            await this.page.type('#password', password, { delay: TYPING_DELAY });
+            
+            // Click sign in
+            console.log('  📝 Submitting credentials...');
+            await Promise.all([
+                this.page.click('.login__form_action_container button'),
+                this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {})
+            ]);
+            
+            // Wait for potential security challenges
+            console.log('  ⏳ Waiting for login response...');
+            console.log('  ⚠️  If prompted, complete CAPTCHA or 2FA manually');
+            
+            await this.delay(5000);
+            
+            // Check for security checkpoint
+            const currentUrl = this.page.url();
+            if (currentUrl.includes('/checkpoint')) {
+                console.log('  🔒 Security checkpoint detected. Waiting 60s for manual verification...');
+                await this.delay(60000);
+            }
+            
+            // Verify login
+            const success = await this.checkLoginStatus();
+            
+            if (success) {
+                console.log('  ✅ Login successful!');
+                await this.saveCookies();
+            } else {
+                console.log('  ❌ Login failed. Check credentials or complete verification.');
+            }
+            
+            return success;
+        } catch (error) {
+            console.log('  ❌ Login error:', error.message);
+            return false;
         }
-        
-        // Check if login successful
-        const success = await this.checkLoginStatus();
-        
-        if (success) {
-            console.log('  ✅ Login successful!');
-            await this.saveCookies();
-        } else {
-            console.log('  ❌ Login failed. Check credentials or complete verification.');
-        }
-        
-        return success;
     }
     
     /**
@@ -238,8 +285,23 @@ class LinkedInAutoApply {
         // Additional filters for recency
         url += '&f_TPR=r604800'; // Past week
         
-        await this.page.goto(url, { waitUntil: 'networkidle2' });
-        await this.delay(2000);
+        try {
+            await this.page.goto(url, { 
+                waitUntil: 'domcontentloaded', 
+                timeout: 60000 
+            });
+            
+            // Wait for job listings to appear
+            await this.page.waitForSelector('.job-card-container, .jobs-search-results__list-item, .scaffold-layout__list-container', { 
+                timeout: 30000 
+            }).catch(() => {
+                console.log('  ⚠️  Job listings may be slow to load');
+            });
+            
+            await this.delay(3000);
+        } catch (e) {
+            console.log('  ⚠️  Search navigation issue:', e.message);
+        }
         
         return url;
     }
@@ -280,13 +342,27 @@ class LinkedInAutoApply {
      * Click on a job to view details
      */
     async selectJob(index) {
-        const jobCards = await this.page.$$('.job-card-container, .jobs-search-results__list-item');
-        if (jobCards[index]) {
-            await jobCards[index].click();
-            await this.delay(2000);
-            return true;
+        try {
+            // Use page.evaluate to click directly in browser context
+            const clicked = await this.page.evaluate((idx) => {
+                const cards = document.querySelectorAll('.job-card-container, .jobs-search-results__list-item');
+                if (cards[idx]) {
+                    const clickable = cards[idx].querySelector('a, .job-card-list__title') || cards[idx];
+                    clickable.click();
+                    return true;
+                }
+                return false;
+            }, index);
+            
+            if (clicked) {
+                await this.delay(2000);
+                return true;
+            }
+            return false;
+        } catch (e) {
+            console.log('  ⚠️  Could not select job:', e.message);
+            return false;
         }
-        return false;
     }
     
     /**
@@ -294,9 +370,22 @@ class LinkedInAutoApply {
      */
     async isEasyApplyAvailable() {
         return this.page.evaluate(() => {
-            const applyBtn = document.querySelector('.jobs-apply-button');
-            if (!applyBtn) return false;
-            return applyBtn.textContent?.includes('Easy Apply') ?? false;
+            // Multiple possible selectors for Easy Apply button
+            const selectors = [
+                '.jobs-apply-button',
+                'button[data-control-name="jobdetails_topcard_inapply"]',
+                '.jobs-unified-top-card__apply-button',
+                '[aria-label*="Easy Apply"]'
+            ];
+            
+            for (const selector of selectors) {
+                const btn = document.querySelector(selector);
+                if (btn && (btn.textContent?.toLowerCase().includes('easy apply') || 
+                           btn.getAttribute('aria-label')?.toLowerCase().includes('easy apply'))) {
+                    return true;
+                }
+            }
+            return false;
         });
     }
     
@@ -304,13 +393,35 @@ class LinkedInAutoApply {
      * Click Easy Apply button
      */
     async clickEasyApply() {
-        const button = await this.page.$('.jobs-apply-button');
-        if (button) {
-            await button.click();
-            await this.delay(2000);
-            return true;
+        try {
+            const clicked = await this.page.evaluate(() => {
+                const selectors = [
+                    '.jobs-apply-button',
+                    'button[data-control-name="jobdetails_topcard_inapply"]',
+                    '.jobs-unified-top-card__apply-button',
+                    '[aria-label*="Easy Apply"]'
+                ];
+                
+                for (const selector of selectors) {
+                    const btn = document.querySelector(selector);
+                    if (btn && (btn.textContent?.toLowerCase().includes('easy apply') || 
+                               btn.getAttribute('aria-label')?.toLowerCase().includes('easy apply'))) {
+                        btn.click();
+                        return true;
+                    }
+                }
+                return false;
+            });
+            
+            if (clicked) {
+                await this.delay(2000);
+                return true;
+            }
+            return false;
+        } catch (e) {
+            console.log('    ⚠️  Error clicking Easy Apply:', e.message);
+            return false;
         }
-        return false;
     }
     
     /**
@@ -324,57 +435,216 @@ class LinkedInAutoApply {
         };
         
         try {
-            // Wait for modal
-            await this.page.waitForSelector('.jobs-easy-apply-modal, .jobs-easy-apply-content', { timeout: 10000 });
+            // Wait for modal to appear
+            console.log('    ⏳ Waiting for Easy Apply modal...');
             
-            let hasNextButton = true;
+            // First check if we hit a login wall or other blocker
+            const pageState = await this.page.evaluate(() => {
+                const url = window.location.href;
+                const hasLoginWall = url.includes('/login') || url.includes('/authwall') || url.includes('/checkpoint');
+                const hasModal = !!document.querySelector('.jobs-easy-apply-modal, .jobs-easy-apply-content, [data-test-modal], .artdeco-modal');
+                return { url, hasLoginWall, hasModal };
+            });
+            
+            if (pageState.hasLoginWall) {
+                console.log('    ⚠️  Login required - session may have expired');
+                return { success: false, error: 'Login wall detected', ...results };
+            }
+            
+            if (!pageState.hasModal) {
+                // Wait longer for modal
+                try {
+                    await this.page.waitForSelector('.jobs-easy-apply-modal, .jobs-easy-apply-content, [data-test-modal], .artdeco-modal', { timeout: 20000 });
+                    console.log('    ✓ Modal detected');
+                } catch (e) {
+                    // Take screenshot for debugging
+                    try {
+                        await this.page.screenshot({ path: '/workspaces/job-autopilot/debug-no-modal.png' });
+                        console.log('    📸 Screenshot saved: debug-no-modal.png');
+                    } catch (se) {}
+                    return { success: false, error: 'Easy Apply modal did not appear', ...results };
+                }
+            } else {
+                console.log('    ✓ Modal detected');
+            }
+            
             let attempts = 0;
             const maxAttempts = 10; // Prevent infinite loops
+            let lastButtonText = '';
+            let sameButtonCount = 0;
             
-            while (hasNextButton && attempts < maxAttempts) {
+            while (attempts < maxAttempts) {
                 attempts++;
+                console.log(`    🔄 Form step ${attempts}...`);
+                
+                // Check if page is still valid
+                try {
+                    await this.page.evaluate(() => document.body !== null);
+                } catch (e) {
+                    return { success: false, error: 'Page context lost', ...results };
+                }
+                
+                // Small delay to let the modal render
+                await this.delay(1500);
+                
+                // Check for error messages (validation errors)
+                const errorCheck = await this.page.evaluate(() => {
+                    const errors = document.querySelectorAll('.artdeco-inline-feedback--error, .fb-dash-form-element--error, [data-test-form-element-error]');
+                    return errors.length > 0 ? Array.from(errors).map(e => e.textContent?.trim()).filter(t => t).slice(0, 3) : [];
+                });
+                if (errorCheck.length > 0) {
+                    console.log(`    ⚠️  Form errors: ${errorCheck.join(', ')}`);
+                }
                 
                 // Upload resume if requested
-                await this.handleResumeUpload();
+                try { await this.handleResumeUpload(); } catch (e) { /* ignore */ }
                 
                 // Fill text inputs
-                await this.fillTextInputs(results);
+                try { await this.fillTextInputs(results); } catch (e) { results.errors.push('textInputs: ' + e.message); }
                 
                 // Handle dropdowns/selects
-                await this.handleDropdowns(results);
+                try { await this.handleDropdowns(results); } catch (e) { results.errors.push('dropdowns: ' + e.message); }
                 
                 // Handle radio buttons
-                await this.handleRadioButtons(results);
+                try { await this.handleRadioButtons(results); } catch (e) { results.errors.push('radios: ' + e.message); }
                 
                 // Handle checkboxes
-                await this.handleCheckboxes(results);
+                try { await this.handleCheckboxes(results); } catch (e) { results.errors.push('checkboxes: ' + e.message); }
+                
+                // Debug: Log what buttons we see
+                const buttonsInfo = await this.page.evaluate(() => {
+                    const buttons = Array.from(document.querySelectorAll('button'));
+                    return buttons
+                        .filter(b => b.offsetParent !== null) // visible buttons only
+                        .map(b => b.textContent?.trim().substring(0, 30))
+                        .filter(t => t && t.length > 0)
+                        .slice(0, 10);
+                });
+                console.log(`    🔘 Visible buttons: ${buttonsInfo.join(', ') || 'none'}`);
                 
                 // Check for Next/Review/Submit button
-                const nextBtn = await this.findButton(['Next', 'Continue', 'Review']);
-                const submitBtn = await this.findButton(['Submit application', 'Submit']);
+                let nextBtn = null;
+                let submitBtn = null;
+                
+                try {
+                    submitBtn = await this.findButton(['Submit application', 'Submit']);
+                    if (!submitBtn) {
+                        nextBtn = await this.findButton(['Next', 'Continue', 'Review']);
+                    }
+                } catch (e) {
+                    // Button finding failed
+                }
+                
+                // Detect if we're stuck (same button appearing repeatedly)
+                const currentButtonText = submitBtn ? 'submit' : (nextBtn ? buttonsInfo.find(b => ['next', 'review', 'continue'].includes(b.toLowerCase())) : '');
+                if (currentButtonText && currentButtonText === lastButtonText) {
+                    sameButtonCount++;
+                    if (sameButtonCount >= 3) {
+                        console.log('    ⚠️  Form appears stuck - required fields may be missing');
+                        try {
+                            await this.page.screenshot({ path: '/workspaces/job-autopilot/debug-stuck.png' });
+                            console.log('    📸 Screenshot saved: debug-stuck.png');
+                        } catch (se) {}
+                        return { success: false, error: 'Form stuck - likely missing required fields', ...results };
+                    }
+                } else {
+                    sameButtonCount = 0;
+                    lastButtonText = currentButtonText || '';
+                }
                 
                 if (submitBtn) {
                     // Final step - submit
-                    await submitBtn.click();
-                    await this.delay(3000);
+                    console.log('    📤 Submitting application...');
+                    try {
+                        // Click using page.evaluate to avoid detached frame issues
+                        await this.page.evaluate(() => {
+                            const btn = document.querySelector('button[aria-label*="Submit"], button');
+                            const buttons = Array.from(document.querySelectorAll('.jobs-easy-apply-modal button, .artdeco-modal button'));
+                            const submitBtn = buttons.find(b => b.textContent?.toLowerCase().includes('submit'));
+                            if (submitBtn) submitBtn.click();
+                        });
+                        await this.delay(3000);
+                    } catch (e) {
+                        return { success: false, error: 'Failed to click submit: ' + e.message, ...results };
+                    }
                     
-                    // Check for success
-                    const success = await this.page.evaluate(() => {
-                        return document.body.textContent?.includes('Application sent') ||
-                               document.body.textContent?.includes('application was sent') ||
-                               document.querySelector('.artdeco-modal__dismiss');
-                    });
+                    // Check for success - look for multiple indicators
+                    let success = false;
+                    try {
+                        success = await this.page.evaluate(() => {
+                            const bodyText = document.body.textContent?.toLowerCase() || '';
+                            const successIndicators = [
+                                'application sent',
+                                'application was sent',
+                                'your application was sent',
+                                'successfully submitted',
+                                'applied successfully'
+                            ];
+                            
+                            // Check text content
+                            for (const indicator of successIndicators) {
+                                if (bodyText.includes(indicator)) return true;
+                            }
+                            
+                            // Check for success modal/screen
+                            const successElements = document.querySelectorAll(
+                                '.artdeco-inline-feedback--success, ' +
+                                '.jobs-apply-success, ' +
+                                '[data-test-modal-id="post-apply-modal"], ' +
+                                '.post-apply-timeline'
+                            );
+                            if (successElements.length > 0) return true;
+                            
+                            // Check if modal closed (may indicate success)
+                            const modalStillOpen = document.querySelector('.jobs-easy-apply-modal');
+                            if (!modalStillOpen) return true;
+                            
+                            return false;
+                        });
+                    } catch (e) {
+                        // If page changed, assume success
+                        success = true;
+                    }
+                    
+                    // Close any remaining modal
+                    try { await this.closeModal(); } catch (e) { /* ignore */ }
                     
                     return { success, ...results };
                 } else if (nextBtn) {
-                    await nextBtn.click();
-                    await this.delay(2000);
+                    try {
+                        // Use browser context click to avoid detached frame issues
+                        const buttonText = await nextBtn.evaluate(btn => btn.textContent?.trim());
+                        await this.page.evaluate((btnText) => {
+                            const modal = document.querySelector('.jobs-easy-apply-modal, .jobs-easy-apply-content, .artdeco-modal');
+                            const container = modal || document;
+                            const buttons = Array.from(container.querySelectorAll('button'));
+                            const btn = buttons.find(b => b.textContent?.trim().toLowerCase().includes(btnText.toLowerCase()));
+                            if (btn) btn.click();
+                        }, buttonText);
+                        await this.delay(2000);
+                    } catch (e) {
+                        // Try direct click as fallback
+                        try {
+                            await nextBtn.click();
+                            await this.delay(2000);
+                        } catch (e2) {
+                            return { success: false, error: 'Failed to click next: ' + e2.message, ...results };
+                        }
+                    }
                 } else {
-                    hasNextButton = false;
+                    // No next or submit button found - form may be stuck
+                    // Check if there are validation errors
+                    const hasErrors = await this.page.evaluate(() => {
+                        return !!document.querySelector('.artdeco-inline-feedback--error, .fb-dash-form-element--error');
+                    });
+                    if (hasErrors) {
+                        console.log('    ⚠️  Form has validation errors - required fields may be missing');
+                    }
+                    return { success: false, error: 'No next or submit button found', ...results };
                 }
             }
             
-            return { success: false, error: 'Could not complete form', ...results };
+            return { success: false, error: 'Exceeded max form attempts', ...results };
             
         } catch (error) {
             return { success: false, error: error.message, ...results };
@@ -400,162 +670,281 @@ class LinkedInAutoApply {
     }
     
     /**
-     * Fill text inputs based on label matching
+     * Fill text inputs based on label matching - runs entirely in browser context
      */
     async fillTextInputs(results) {
-        const inputs = await this.page.$$('.jobs-easy-apply-modal input[type="text"], .jobs-easy-apply-modal textarea');
+        const profile = this.options.profile;
+        const userAnswers = this.options.userAnswers;
         
-        for (const input of inputs) {
-            try {
-                const label = await input.evaluate(el => {
-                    const labelEl = el.closest('.fb-dash-form-element')?.querySelector('label') ||
-                                   document.querySelector(`label[for="${el.id}"]`);
-                    return labelEl?.textContent?.toLowerCase() || '';
-                });
+        const filledFields = await this.page.evaluate((profile, userAnswers) => {
+            const filled = [];
+            const modalSelectors = [
+                '.jobs-easy-apply-modal',
+                '.jobs-easy-apply-content',
+                '[data-test-modal-id="easy-apply-modal"]',
+                '.artdeco-modal'
+            ];
+            
+            let modal = null;
+            for (const sel of modalSelectors) {
+                modal = document.querySelector(sel);
+                if (modal) break;
+            }
+            if (!modal) modal = document;
+            
+            // Include number inputs for experience questions
+            const inputs = modal.querySelectorAll('input[type="text"], input[type="number"], textarea, input:not([type])');
+            
+            for (const input of inputs) {
+                if (input.value) continue; // Already filled
+                if (input.type === 'hidden' || input.type === 'file') continue;
                 
-                const currentValue = await input.evaluate(el => el.value);
-                if (currentValue) continue; // Already filled
+                // Find label - try multiple approaches
+                let labelEl = input.closest('.fb-dash-form-element, .artdeco-text-input')?.querySelector('label');
+                if (!labelEl) labelEl = document.querySelector(`label[for="${input.id}"]`);
+                if (!labelEl) labelEl = input.closest('label');
+                if (!labelEl) labelEl = input.parentElement?.querySelector('label');
+                if (!labelEl) {
+                    // Look for preceding span/label text
+                    const parent = input.closest('.fb-dash-form-element, .artdeco-text-input, .jobs-easy-apply-form-element');
+                    if (parent) labelEl = parent.querySelector('label, span.visually-hidden, .t-bold');
+                }
                 
-                let value = this.findAnswer(label);
+                const label = labelEl?.textContent?.toLowerCase().trim() || '';
                 
-                // Special handling for known fields
-                if (label.includes('phone') || label.includes('mobile')) {
-                    value = this.options.profile.phone;
+                let value = '';
+                
+                // Handle number inputs (years of experience questions)
+                if (input.type === 'number') {
+                    // Experience questions typically ask for years
+                    if (label.includes('year') || label.includes('experience')) {
+                        value = '5'; // Default 5 years
+                    } else {
+                        value = '3'; // Generic number default
+                    }
+                }
+                // Known text fields
+                else if (label.includes('phone') || label.includes('mobile')) {
+                    value = profile.phone || '8322158648';
                 } else if (label.includes('email')) {
-                    value = this.options.profile.email;
+                    value = profile.email || '';
                 } else if (label.includes('city')) {
-                    value = this.options.profile.city;
+                    value = profile.city || 'Katy';
                 } else if (label.includes('first name')) {
-                    value = this.options.profile.firstName;
+                    value = profile.firstName || 'Rami';
                 } else if (label.includes('last name')) {
-                    value = this.options.profile.lastName;
+                    value = profile.lastName || 'Abdelrazzaq';
+                } else if (label.includes('linkedin')) {
+                    value = profile.linkedinHandle ? `https://linkedin.com/in/${profile.linkedinHandle}` : '';
+                } else if (label.includes('github')) {
+                    value = profile.githubHandle ? `https://github.com/${profile.githubHandle}` : '';
+                } else if (label.includes('year') || label.includes('experience')) {
+                    value = '5'; // Years of experience default
+                } else if (label.includes('salary') || label.includes('compensation')) {
+                    value = ''; // Leave salary blank
+                } else {
+                    // Try to find answer from userAnswers
+                    for (const [keyword, answer] of Object.entries(userAnswers)) {
+                        if (label.includes(keyword.toLowerCase())) {
+                            value = answer;
+                            break;
+                        }
+                    }
                 }
                 
                 if (value) {
-                    await input.click({ clickCount: 3 }); // Select all
-                    await input.type(value, { delay: TYPING_DELAY });
-                    results.filled.push(label);
+                    input.value = value;
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    filled.push(label || 'unknown field');
                 }
-            } catch (e) {
-                results.errors.push(e.message);
             }
-        }
+            
+            return filled;
+        }, profile, userAnswers);
+        
+        results.filled.push(...filledFields);
     }
     
     /**
-     * Handle dropdown/select elements
+     * Handle dropdown/select elements - runs in browser context
      */
     async handleDropdowns(results) {
-        const selects = await this.page.$$('.jobs-easy-apply-modal select');
+        const userAnswers = this.options.userAnswers;
         
-        for (const select of selects) {
-            try {
-                const label = await select.evaluate(el => {
-                    const labelEl = el.closest('.fb-dash-form-element')?.querySelector('label');
-                    return labelEl?.textContent?.toLowerCase() || '';
-                });
+        const filledDropdowns = await this.page.evaluate((userAnswers) => {
+            const filled = [];
+            const modal = document.querySelector('.jobs-easy-apply-modal, .jobs-easy-apply-content') || document;
+            const selects = modal.querySelectorAll('select');
+            
+            for (const select of selects) {
+                const labelEl = select.closest('.fb-dash-form-element, .artdeco-dropdown')?.querySelector('label');
+                const label = labelEl?.textContent?.toLowerCase().trim() || '';
                 
-                const options = await select.evaluate(el => 
-                    Array.from(el.options).map(o => ({ value: o.value, text: o.text.toLowerCase() }))
-                );
-                
-                // Find best matching option
-                let answer = this.findAnswer(label);
-                
-                // Try to match answer to option
-                const matchingOption = options.find(o => 
-                    o.text.includes(answer?.toLowerCase() || '') ||
-                    answer?.toLowerCase().includes(o.text)
-                );
-                
-                if (matchingOption) {
-                    await select.select(matchingOption.value);
-                    results.filled.push(label);
-                } else if (options.length > 1) {
-                    // Select first non-empty option as fallback
-                    const firstValid = options.find(o => o.value && o.text !== 'select');
-                    if (firstValid) {
-                        await select.select(firstValid.value);
-                        results.filled.push(label + ' (fallback)');
-                    }
-                }
-            } catch (e) {
-                results.errors.push(e.message);
-            }
-        }
-    }
-    
-    /**
-     * Handle radio buttons
-     */
-    async handleRadioButtons(results) {
-        const radioGroups = await this.page.$$('.jobs-easy-apply-modal fieldset');
-        
-        for (const group of radioGroups) {
-            try {
-                const legend = await group.evaluate(el => 
-                    el.querySelector('legend, span.visually-hidden')?.textContent?.toLowerCase() || ''
-                );
-                
-                const answer = this.findAnswer(legend);
-                
-                const radios = await group.$$('input[type="radio"]');
-                for (const radio of radios) {
-                    const radioLabel = await radio.evaluate(el => {
-                        const label = el.nextElementSibling || el.closest('label');
-                        return label?.textContent?.toLowerCase() || '';
-                    });
-                    
-                    if (radioLabel.includes(answer?.toLowerCase() || '')) {
-                        await radio.click();
-                        results.filled.push(legend);
+                // Find answer
+                let answer = null;
+                for (const [keyword, ans] of Object.entries(userAnswers)) {
+                    if (label.includes(keyword.toLowerCase())) {
+                        answer = ans;
                         break;
                     }
                 }
-            } catch (e) {
-                results.errors.push(e.message);
+                
+                if (answer) {
+                    // Find matching option
+                    for (const option of select.options) {
+                        if (option.text.toLowerCase().includes(answer.toLowerCase()) ||
+                            answer.toLowerCase().includes(option.text.toLowerCase())) {
+                            select.value = option.value;
+                            select.dispatchEvent(new Event('change', { bubbles: true }));
+                            filled.push(label);
+                            break;
+                        }
+                    }
+                } else if (select.options.length > 1 && !select.value) {
+                    // Select first non-empty option as fallback
+                    for (const option of select.options) {
+                        if (option.value && option.text.toLowerCase() !== 'select') {
+                            select.value = option.value;
+                            select.dispatchEvent(new Event('change', { bubbles: true }));
+                            filled.push(label + ' (fallback)');
+                            break;
+                        }
+                    }
+                }
             }
-        }
+            
+            return filled;
+        }, userAnswers);
+        
+        results.filled.push(...filledDropdowns);
     }
     
     /**
-     * Handle checkboxes (agreements, etc.)
+     * Handle radio buttons - runs in browser context
+     */
+    async handleRadioButtons(results) {
+        const userAnswers = this.options.userAnswers;
+        
+        const filledRadios = await this.page.evaluate((userAnswers) => {
+            const filled = [];
+            const modal = document.querySelector('.jobs-easy-apply-modal, .jobs-easy-apply-content') || document;
+            const fieldsets = modal.querySelectorAll('fieldset');
+            
+            for (const fieldset of fieldsets) {
+                const legend = fieldset.querySelector('legend, span.visually-hidden, .fb-dash-form-element__label');
+                const questionText = legend?.textContent?.toLowerCase().trim() || '';
+                
+                // Find answer for this question
+                let answer = null;
+                for (const [keyword, ans] of Object.entries(userAnswers)) {
+                    if (questionText.includes(keyword.toLowerCase())) {
+                        answer = ans;
+                        break;
+                    }
+                }
+                
+                if (!answer) continue;
+                
+                const radios = fieldset.querySelectorAll('input[type="radio"]');
+                for (const radio of radios) {
+                    const labelEl = radio.nextElementSibling || 
+                                   radio.closest('label') || 
+                                   document.querySelector(`label[for="${radio.id}"]`);
+                    const radioLabel = labelEl?.textContent?.toLowerCase().trim() || '';
+                    
+                    if (radioLabel.includes(answer.toLowerCase()) || 
+                        answer.toLowerCase().includes(radioLabel)) {
+                        radio.click();
+                        filled.push(questionText.substring(0, 50));
+                        break;
+                    }
+                }
+            }
+            
+            return filled;
+        }, userAnswers);
+        
+        results.filled.push(...filledRadios);
+    }
+    
+    /**
+     * Handle checkboxes (agreements, etc.) - runs in browser context
      */
     async handleCheckboxes(results) {
-        const checkboxes = await this.page.$$('.jobs-easy-apply-modal input[type="checkbox"]');
-        
-        for (const checkbox of checkboxes) {
-            try {
-                const isRequired = await checkbox.evaluate(el => el.required);
-                const isChecked = await checkbox.evaluate(el => el.checked);
-                
-                if (isRequired && !isChecked) {
-                    await checkbox.click();
-                    results.filled.push('agreement checkbox');
+        const checkedBoxes = await this.page.evaluate(() => {
+            const filled = [];
+            const modal = document.querySelector('.jobs-easy-apply-modal, .jobs-easy-apply-content') || document;
+            const checkboxes = modal.querySelectorAll('input[type="checkbox"]');
+            
+            for (const checkbox of checkboxes) {
+                // Check required unchecked checkboxes (typically agreements)
+                if (checkbox.required && !checkbox.checked) {
+                    checkbox.click();
+                    filled.push('agreement checkbox');
                 }
-            } catch (e) {
-                // Checkbox may be hidden or disabled
+                
+                // Also check if the label suggests it's an agreement
+                const label = checkbox.closest('label')?.textContent?.toLowerCase() || '';
+                if (!checkbox.checked && (label.includes('agree') || label.includes('consent') || label.includes('acknowledge'))) {
+                    checkbox.click();
+                    filled.push('agreement checkbox');
+                }
             }
-        }
+            
+            return filled;
+        });
+        
+        results.filled.push(...checkedBoxes);
     }
     
     /**
-     * Find a button by text
+     * Find a button by text - searches within modal first
      */
     async findButton(texts) {
         for (const text of texts) {
-            // Prefer aria-label contains
-            const ariaBtn = await this.page.$(`button[aria-label*="${text}"]`);
-            if (ariaBtn) return ariaBtn;
+            try {
+                // Search within modal for button with matching text
+                const handle = await this.page.evaluateHandle((searchText) => {
+                    // First check within modal
+                    const modal = document.querySelector('.jobs-easy-apply-modal, .jobs-easy-apply-content, .artdeco-modal');
+                    const container = modal || document;
+                    
+                    const buttons = Array.from(container.querySelectorAll('button'));
+                    
+                    // Find button where text content matches (case insensitive, trimmed)
+                    for (const btn of buttons) {
+                        const btnText = (btn.textContent || '').trim().toLowerCase();
+                        const searchLower = searchText.toLowerCase();
+                        
+                        // Exact match or starts with
+                        if (btnText === searchLower || btnText.startsWith(searchLower)) {
+                            // Make sure button is visible
+                            if (btn.offsetParent !== null) {
+                                return btn;
+                            }
+                        }
+                    }
+                    
+                    // Fallback: partial match within modal
+                    for (const btn of buttons) {
+                        const btnText = (btn.textContent || '').trim().toLowerCase();
+                        if (btnText.includes(searchText.toLowerCase()) && btn.offsetParent !== null) {
+                            return btn;
+                        }
+                    }
+                    
+                    return null;
+                }, text);
 
-            // Fallback: search visible button text (Puppeteer does not support :has-text)
-            const handle = await this.page.evaluateHandle((searchText) => {
-                const buttons = Array.from(document.querySelectorAll('button'));
-                return buttons.find(b => (b.textContent || '').trim().includes(searchText)) || null;
-            }, text);
-
-            const el = handle.asElement();
-            if (el) return el;
+                const el = handle.asElement();
+                if (el) {
+                    console.log(`    ✓ Found button: "${text}"`);
+                    return el;
+                }
+            } catch (e) {
+                // Continue to next text option
+            }
         }
         return null;
     }
@@ -598,10 +987,10 @@ class LinkedInAutoApply {
     }
     
     /**
-     * Apply to a specific job (main method)
+     * Apply to a specific job (main method) - works when job is already selected in view
      */
-    async applyToJob(jobUrl) {
-        console.log(`\n📝 Applying to job...`);
+    async applyToCurrentJob() {
+        console.log(`    📝 Attempting to apply...`);
         
         if (this.applicationsThisSession >= this.options.maxApps) {
             return { 
@@ -612,18 +1001,45 @@ class LinkedInAutoApply {
         }
         
         try {
-            // Navigate to job
-            await this.page.goto(jobUrl, { waitUntil: 'networkidle2' });
+            // Wait a moment for job details to fully load
             await this.delay(2000);
+            
+            // Debug: log current page state
+            const pageInfo = await this.page.evaluate(() => ({
+                url: window.location.href,
+                hasEasyApplyBtn: !!document.querySelector('.jobs-apply-button, button[aria-label*="Easy Apply"]'),
+                buttonText: document.querySelector('.jobs-apply-button')?.textContent?.trim() || 'N/A'
+            }));
+            console.log(`    📍 Page: ${pageInfo.url.substring(0, 80)}...`);
+            console.log(`    🔘 Button found: ${pageInfo.hasEasyApplyBtn}, Text: "${pageInfo.buttonText}"`);
             
             // Check if Easy Apply
             const isEasyApply = await this.isEasyApplyAvailable();
             if (!isEasyApply) {
+                console.log('    ⏭️  Not an Easy Apply job');
                 return { success: false, error: 'Not an Easy Apply job', skipReason: 'external' };
             }
             
+            // Check if already applied
+            const alreadyApplied = await this.page.evaluate(() => {
+                const appliedIndicator = document.querySelector('.jobs-apply-button--applied, [aria-label*="Applied"]');
+                const buttonText = document.querySelector('.jobs-apply-button')?.textContent?.toLowerCase() || '';
+                return !!appliedIndicator || buttonText.includes('applied');
+            });
+            
+            if (alreadyApplied) {
+                console.log('    ⏭️  Already applied to this job');
+                return { success: false, error: 'Already applied', skipReason: 'already_applied' };
+            }
+            
             // Click Easy Apply
-            await this.clickEasyApply();
+            console.log('    🖱️  Clicking Easy Apply button...');
+            const clicked = await this.clickEasyApply();
+            if (!clicked) {
+                return { success: false, error: 'Could not click Easy Apply button' };
+            }
+            
+            console.log('    📋 Filling application form...');
             
             // Fill form
             const result = await this.fillEasyApplyForm();
@@ -631,8 +1047,14 @@ class LinkedInAutoApply {
             if (result.success) {
                 this.applicationsThisSession++;
                 console.log(`    ✅ Application submitted! (${this.applicationsThisSession}/${this.options.maxApps})`);
+                if (result.filled.length > 0) {
+                    console.log(`    📝 Filled: ${result.filled.join(', ')}`);
+                }
             } else {
                 console.log(`    ❌ Application failed: ${result.error}`);
+                if (result.errors?.length > 0) {
+                    console.log(`    ⚠️  Errors: ${result.errors.join(', ')}`);
+                }
                 await this.closeModal();
             }
             
@@ -641,6 +1063,24 @@ class LinkedInAutoApply {
         } catch (error) {
             console.log(`    ❌ Error: ${error.message}`);
             await this.closeModal();
+            return { success: false, error: error.message };
+        }
+    }
+    
+    /**
+     * Apply to a specific job by URL (navigates to the job first)
+     */
+    async applyToJob(jobUrl) {
+        console.log(`\n📝 Applying to job: ${jobUrl}`);
+        
+        try {
+            // Navigate to job
+            await this.page.goto(jobUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+            await this.delay(2000);
+            
+            return await this.applyToCurrentJob();
+        } catch (error) {
+            console.log(`    ❌ Error navigating: ${error.message}`);
             return { success: false, error: error.message };
         }
     }
@@ -667,6 +1107,7 @@ class LinkedInAutoApply {
         
         // Search jobs
         await this.searchJobs(query, location, true);
+        await this.delay(3000);
         
         let processed = 0;
         let pageNum = 1;
@@ -674,8 +1115,21 @@ class LinkedInAutoApply {
         while (processed < limit && pageNum <= 10) {
             console.log(`\n📃 Processing page ${pageNum}...`);
             
+            // Wait for job listings to load
+            try {
+                await this.page.waitForSelector('.job-card-container, .jobs-search-results__list-item', { timeout: 15000 });
+            } catch (e) {
+                console.log('   ⚠️  No job listings found on this page');
+                break;
+            }
+            
             const jobs = await this.getJobListings();
             console.log(`   Found ${jobs.length} jobs on this page`);
+            
+            if (jobs.length === 0) {
+                console.log('   ⚠️  No jobs found. Try different search terms.');
+                break;
+            }
             
             for (const job of jobs) {
                 if (processed >= limit) break;
@@ -689,49 +1143,66 @@ class LinkedInAutoApply {
                     await this.delay(delay);
                 }
                 
-                // Select job
-                await this.selectJob(job.index);
-                
-                // Try to apply
-                const result = await this.applyToJob(this.page.url());
-                
-                if (result.success) {
-                    results.applied.push({
-                        title: job.title,
-                        company: job.company,
-                        location: job.location,
-                        jobId: job.jobId
-                    });
-                } else if (result.skipReason) {
-                    results.skipped.push({
-                        ...job,
-                        reason: result.skipReason
-                    });
-                } else {
-                    results.failed.push({
-                        ...job,
-                        error: result.error
-                    });
-                }
-                
-                processed++;
-                results.total = processed;
-                
-                // Check rate limit
-                if (result.rateLimited) {
-                    console.log('\n⚠️  Rate limit reached. Stopping.');
-                    break;
+                try {
+                    // Select job (click on it to load details in side panel)
+                    const selected = await this.selectJob(job.index);
+                    if (!selected) {
+                        console.log('   ⚠️  Could not select job');
+                        results.failed.push({ ...job, error: 'Could not select' });
+                        processed++;
+                        continue;
+                    }
+                    
+                    // Wait for job details to load
+                    await this.delay(2000);
+                    
+                    // Try to apply to the currently selected job
+                    const result = await this.applyToCurrentJob();
+                    
+                    if (result.success) {
+                        results.applied.push({
+                            title: job.title,
+                            company: job.company,
+                            location: job.location,
+                            jobId: job.jobId
+                        });
+                    } else if (result.skipReason) {
+                        results.skipped.push({
+                            ...job,
+                            reason: result.skipReason
+                        });
+                    } else {
+                        results.failed.push({
+                            ...job,
+                            error: result.error
+                        });
+                    }
+                    
+                    processed++;
+                    results.total = processed;
+                    
+                    // Check rate limit
+                    if (result.rateLimited) {
+                        console.log('\n⚠️  Rate limit reached. Stopping.');
+                        break;
+                    }
+                } catch (jobError) {
+                    console.log(`   ❌ Error processing job: ${jobError.message}`);
+                    results.failed.push({ ...job, error: jobError.message });
+                    processed++;
                 }
             }
             
-            // Try next page
-            const nextButton = await this.page.$('[aria-label="Page \\d+"], button[aria-label*="next"]');
-            if (nextButton) {
-                await nextButton.click();
-                await this.delay(3000);
-                pageNum++;
-            } else {
-                break;
+            // Try next page if we need more jobs
+            if (processed < limit) {
+                const nextPageClicked = await this.goToNextPage();
+                if (nextPageClicked) {
+                    pageNum++;
+                    await this.delay(3000);
+                } else {
+                    console.log('\n   No more pages available.');
+                    break;
+                }
             }
         }
         
@@ -741,6 +1212,42 @@ class LinkedInAutoApply {
         console.log(`   ❌ Failed: ${results.failed.length}`);
         
         return results;
+    }
+    
+    /**
+     * Navigate to next page of job listings
+     */
+    async goToNextPage() {
+        try {
+            // LinkedIn pagination - look for next page button
+            const nextButton = await this.page.evaluateHandle(() => {
+                // Find the pagination area
+                const paginationItems = document.querySelectorAll('.jobs-search-results-list__pagination li button');
+                const currentPage = document.querySelector('.jobs-search-results-list__pagination li.active button, .jobs-search-results-list__pagination li[aria-current="page"] button');
+                
+                if (currentPage && paginationItems.length > 0) {
+                    const currentNum = parseInt(currentPage.textContent) || 1;
+                    for (const btn of paginationItems) {
+                        if (parseInt(btn.textContent) === currentNum + 1) {
+                            return btn;
+                        }
+                    }
+                }
+                
+                // Alternative: look for "Next" or arrow button
+                const arrowBtn = document.querySelector('button[aria-label*="next"], button[aria-label*="Next"]');
+                return arrowBtn || null;
+            });
+            
+            const element = nextButton.asElement();
+            if (element) {
+                await element.click();
+                return true;
+            }
+            return false;
+        } catch (e) {
+            return false;
+        }
     }
     
     /**

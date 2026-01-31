@@ -1,0 +1,38 @@
+# Credentials & Secrets - NEVER COMMIT
+.env
+.env.*
+*.env
+
+# LinkedIn session cookies - contains auth tokens
+data/linkedin-cookies.json
+
+# Debug screenshots
+debug-*.png
+
+# Node modules
+node_modules/
+
+# Database (contains personal job application data)
+database/*.db
+database/*.sqlite
+*.db
+*.sqlite
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Compiled PDFs (large files)
+applications/**/*.pdf
+
+# Temporary files
+*.tmp
+*.temp

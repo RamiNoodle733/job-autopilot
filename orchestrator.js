@@ -80,7 +80,13 @@ function parseArgs(args) {
         } else if (args[i] === '--force') {
             parsed.force = true;
         } else if (args[i] === '--headless') {
-            parsed.headless = true;
+            // Support both --headless (flag) and --headless true/false
+            if (args[i + 1] && (args[i + 1] === 'true' || args[i + 1] === 'false')) {
+                parsed.headless = args[i + 1] === 'true';
+                i++;
+            } else {
+                parsed.headless = true;
+            }
         } else if (!args[i].startsWith('--')) {
             parsed._.push(args[i]);
         }
@@ -407,9 +413,11 @@ async function cmdMassApply(limit = 10, options = {}) {
                 firstName: 'Rami',
                 lastName: 'Abdelrazzaq',
                 email: process.env.GMAIL_USER || 'ramiabdelrazzaq@gmail.com',
-                phone: process.env.PHONE || '',
+                phone: process.env.PHONE || '8322158648',
                 city: 'Katy',
-                state: 'TX'
+                state: 'TX',
+                linkedinHandle: 'ramiabdelrazzaq',
+                githubHandle: 'RamiNoodle733'
             }
         });
         
@@ -419,27 +427,17 @@ async function cmdMassApply(limit = 10, options = {}) {
         const loggedIn = await linkedIn.checkLoginStatus();
         
         if (!loggedIn) {
-            console.log('\n⚠️  Not logged in to LinkedIn.');
-            console.log('   The browser will open. Please log in manually.');
-            console.log('   (Your session will be saved for next time)');
+            console.log('\n⚠️  Not logged in to LinkedIn. Attempting auto-login...');
             
             if (process.env.LINKEDIN_EMAIL && process.env.LINKEDIN_PASSWORD) {
                 await linkedIn.login(process.env.LINKEDIN_EMAIL, process.env.LINKEDIN_PASSWORD);
             } else {
-                // Wait for manual login
-                console.log('\n   Waiting 60 seconds for manual login...');
-                await linkedIn.page.goto('https://www.linkedin.com/login');
-                await new Promise(resolve => setTimeout(resolve, 60000));
-                
-                if (await linkedIn.checkLoginStatus()) {
-                    console.log('   ✅ Login detected!');
-                    await linkedIn.saveCookies();
-                } else {
-                    console.log('   ❌ Still not logged in. Exiting.');
-                    await linkedIn.close();
-                    return;
-                }
+                console.log('   ❌ No LinkedIn credentials in .env - cannot login');
+                await linkedIn.close();
+                return;
             }
+        } else {
+            console.log('✅ Already logged in via saved cookies');
         }
         
         // Run mass apply
