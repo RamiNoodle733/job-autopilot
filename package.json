@@ -1,0 +1,36 @@
+{
+  "name": "job-application-autopilot",
+  "version": "1.0.0",
+  "description": "Automated job search and application system for Rami",
+  "main": "orchestrator.js",
+  "scripts": {
+    "start": "node orchestrator.js",
+    "scrape": "node orchestrator.js scrape",
+    "tailor": "node orchestrator.js tailor",
+    "send": "node orchestrator.js send",
+    "report": "node orchestrator.js report",
+    "test": "node --test src/**/*.test.js",
+    "init-db": "node src/init-database.js"
+  },
+  "keywords": [
+    "job-search",
+    "automation",
+    "resume",
+    "career"
+  ],
+  "author": "Rami Abdelrazzaq",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.13.4",
+    "better-sqlite3": "^12.6.2",
+    "cheerio": "^1.2.0",
+    "dotenv": "^17.2.3",
+    "fs-extra": "^11.3.3",
+    "nodemailer": "^7.0.13",
+    "puppeteer": "^24.36.1",
+    "sqlite3": "^5.1.7"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

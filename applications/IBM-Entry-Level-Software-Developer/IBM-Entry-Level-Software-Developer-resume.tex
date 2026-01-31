@@ -1,0 +1,129 @@
+%-------------------------
+% Resume in LaTeX
+% Author : Rami Abdelrazzaq
+% Template: AI-Optimized for One-Page Perfection
+%-------------------------
+\documentclass[letterpaper,10pt]{article}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{fancyhdr}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+\usepackage{xurl}
+\usepackage{calc}
+\usepackage{ragged2e}
+
+% Page styling
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Adjust margins - tight but professional
+\addtolength{\oddsidemargin}{-0.6in}
+\addtolength{\evensidemargin}{-0.6in}
+\addtolength{\textwidth}{1.2in}
+\addtolength{\topmargin}{-.6in}
+\addtolength{\textheight}{1.2in}
+
+\urlstyle{same}
+\raggedbottom
+\setlength{\tabcolsep}{0in}
+
+% Section formatting - compact
+\titleformat{\section}{\vspace{-6pt}\scshape\raggedright\normalsize}{}{0em}{}[\color{black}\titlerule \vspace{-6pt}]
+
+% Custom commands
+\newcommand{\resumeItem}[1]{\item\small{#1 \vspace{-2pt}}}
+
+\newcommand{\resumeSubheading}[4]{
+  \vspace{-1pt}\item
+  \begin{tabularx}{0.97\textwidth}[t]{@{}X r@{}}
+    \textbf{#1} & #2 \\
+    \textit{\small #3} & \textit{\small #4} \\
+  \end{tabularx}\vspace{-5pt}
+}
+
+\newcommand{\resumeProjectHeading}[2]{
+  \vspace{-1pt}\item
+  \begin{tabularx}{0.97\textwidth}[t]{@{}X r@{}}
+    \textbf{#1} & #2 \\
+  \end{tabularx}\vspace{-5pt}
+}
+
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.15in, label={}, nosep, topsep=2pt]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
+\newcommand{\resumeItemListStart}{\begin{itemize}[nosep, topsep=1pt, parsep=0pt]}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{-3pt}}
+
+%-------------------------------------------
+%%%%%%  RESUME STARTS HERE  %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+%----------HEADING----------
+\begin{center}
+  \textbf{\LARGE \scshape Rami Abdelrazzaq} \\[2pt]
+  \small (832) 215-8648 $|$ \href{mailto:rami@example.com}rami@example.com $|$ \href{https://linkedin.com/in/ramiabdelrazzaq}{linkedin.com/in/ramiabdelrazzaq} $|$ \href{https://github.com/RamiNoodle733}{github.com/RamiNoodle733}
+\end{center}
+
+%-----------EDUCATION-----------
+\section{Education}
+\resumeSubHeadingListStart
+  \resumeSubheading
+    {University of Houston}{Houston, TX}
+    {Bachelor of Science in Computer Science -- Cum Laude}{Graduated: May 2025}
+\resumeSubHeadingListEnd
+
+%-----------EXPERIENCE-----------
+\section{Experience}
+\resumeSubHeadingListStart
+  \resumeSubheading
+    {AI Evaluation Specialist}{Nov 2024 -- Present}
+    {Outlier AI}{Remote}
+    \resumeItemListStart
+      \resumeItem{Trained and refined AI coding models through code assessments, debugging tasks, and performance optimizations}
+      \resumeItem{Evaluated AI-generated solutions for accuracy and clarity across multiple programming languages}
+      \resumeItem{Collaborated with cross-functional teams to deliver high-quality results using feedback platforms}
+    \resumeItemListEnd
+  
+  \resumeSubheading
+    {Software Developer (Capstone)}{Jan 2025 -- May 2025}
+    {Boston Scientific}{Houston, TX}
+    \resumeItemListStart
+      \resumeItem{Built Cardio Vision, a web app automating ECG analysis for cardiovascular diagnostics using Python, Flask, SQLAlchemy}
+      \resumeItem{Implemented backend data operations for large ECG datasets and triaxial vector visualizations}
+      \resumeItem{Presented technical solutions to potential users and stakeholders; wrote comprehensive test suites}
+    \resumeItemListEnd
+\resumeSubHeadingListEnd
+
+%-----------PROJECTS-----------
+\section{Projects}
+\resumeSubHeadingListStart
+  \resumeProjectHeading
+    {\textbf{Cougar Degree} -- MLH Winner (Best Use of DigitalOcean Gradient AI)}{Oct 2025}
+    \resumeItemListStart
+      \resumeItem{AI-powered degree planner generating personalized 8-semester roadmaps with prerequisite enforcement}
+      \resumeItem{Integrated Gemini 2.5 Flash + DigitalOcean Gradient AI (Llama 3) via REST API with Bearer auth}
+      \resumeItem{Built difficulty-aware scheduling using CougarGrades.io data to optimize credit loads}
+    \resumeItemListEnd
+  
+  \resumeProjectHeading
+    {\textbf{Islamic Glossary Reminders} -- Full-Stack Web App}{2024 -- Present}
+    \resumeItemListStart
+      \resumeItem{Gamified learning platform with streaks, leaderboards, and time-based check-ins using Node.js, Express, MongoDB}
+      \resumeItem{Implemented JWT authentication, RESTful APIs, and persistent user progress tracking}
+    \resumeItemListEnd
+\resumeSubHeadingListEnd
+
+%-----------SKILLS-----------
+\section{Technical Skills}
+\small
+\textbf{Languages:} Python, JavaScript, Java, C++, SQL, HTML/CSS \\[1pt]
+\textbf{Frameworks/Tools:} Flask, Node.js, Express, MongoDB, Git, GitHub, VS Code, Render \\[1pt]
+\textbf{AI/ML:} AI-assisted development, LLM API integration, vibe-coding workflows, data analysis
+
+\end{document}

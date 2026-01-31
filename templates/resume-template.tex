@@ -1,0 +1,98 @@
+\documentclass[11pt,a4paper]{article}
+
+% Page layout
+\usepackage[margin=0.5in]{geometry}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{fontspec}
+\usepackage{parskip}
+
+% Remove page numbers
+\pagestyle{empty}
+
+% Colors
+\definecolor{headerblue}{RGB}{0, 51, 102}
+\definecolor{darkgray}{RGB}{64, 64, 64}
+
+% Hyperref setup
+\hypersetup{
+    colorlinks=true,
+    linkcolor=headerblue,
+    urlcolor=headerblue,
+    pdftitle={{{CANDIDATE_NAME} - Resume}},
+    pdfauthor={{CANDIDATE_NAME}}
+}
+
+% Section formatting
+\titleformat{\section}
+    {\large\bfseries\color{headerblue}}
+    {}
+    {0em}
+    {}
+    [\vspace{-0.5em}\textcolor{headerblue}{\rule{\linewidth}{1pt}}]
+\titlespacing*{\section}{0pt}{0.5em}{0.3em}
+
+% Custom commands
+\newcommand{\resumeItem}[1]{\item\small{#1}}
+\newcommand{\experienceEntry}[4]{%
+    \noindent\textbf{#1} \hfill \textit{#2}\\
+    \textit{#3} \hfill #4
+    \vspace{0.1em}
+}
+
+\newcommand{\projectEntry}[3]{%
+    \noindent\textbf{#1} \hfill \textit{#2}\\
+    \small{#3}
+    \vspace{0.1em}
+}
+
+\begin{document}
+
+% Header
+\begin{center}
+    {\LARGE\bfseries\color{headerblue} {{CANDIDATE_NAME}}}\\[0.3em]
+    {{CANDIDATE_LOCATION}} | {{CANDIDATE_EMAIL}} | {{CANDIDATE_PHONE}}\\
+    \href{{{CANDIDATE_LINKEDIN}}}{LinkedIn} | \href{{{CANDIDATE_GITHUB}}}{GitHub} | \href{{{CANDIDATE_PORTFOLIO}}}{Portfolio}
+\end{center}
+
+\vspace{0.3em}
+
+% Summary
+\section{Summary}
+{{SUMMARY}}
+
+% Education
+\section{Education}
+\experienceEntry{{DEGREE}}{{{GRADUATION_DATE}}}{{UNIVERSITY}}{{{LOCATION}}}
+\begin{itemize}[leftmargin=1.5em, itemsep=0pt, parsep=0pt, topsep=0.2em]
+    \resumeItem{{EDU_DETAILS}}
+\end{itemize}
+
+% Technical Skills
+\section{Technical Skills}
+\begin{itemize}[leftmargin=1.5em, itemsep=0pt, parsep=0pt, topsep=0.2em]
+    \resumeItem{\textbf{Languages:} {{SKILL_LANGUAGES}}}
+    \resumeItem{\textbf{Frameworks:} {{SKILL_FRAMEWORKS}}}
+    \resumeItem{\textbf{Tools/Cloud:} {{SKILL_TOOLS}}}
+    \resumeItem{\textbf{AI/ML:} {{SKILL_AI_ML}}}
+\end{itemize}
+
+% Experience
+\section{Experience}
+{{EXPERIENCE_SECTION}}
+
+% Projects
+\section{Projects}
+{{PROJECTS_SECTION}}
+
+% Certifications
+\section{Certifications}
+\begin{itemize}[leftmargin=1.5em, itemsep=0pt, parsep=0pt, topsep=0.2em]
+    \resumeItem{{CERTIFICATIONS}}
+\end{itemize}
+
+\vfill
+
+\end{document}
