@@ -76,7 +76,9 @@ jobs:
           echo "🔍 Searching for: ${QUERY} in ${LOCATION}"
 
       - name: Restore LinkedIn cookies
-        if: ${{ secrets.LINKEDIN_COOKIES != '' }}
+        env:
+          LINKEDIN_COOKIES: ${{ secrets.LINKEDIN_COOKIES }}
+        if: ${{ env.LINKEDIN_COOKIES != '' }}
         run: |
           echo "${{ secrets.LINKEDIN_COOKIES }}" | base64 -d > data/linkedin-cookies.json
 

@@ -1,0 +1,28 @@
+{
+  "firstName": "Rami",
+  "lastName": "Abdelrazzaq",
+  "email": "ramiabdelrazzaq@gmail.com",
+  "phone": "8322158648",
+  "location": "Katy, TX",
+  "linkedinHandle": "ramiabdelrazzaq",
+  "githubHandle": "RamiNoodle733",
+  "portfolioUrl": "",
+  "summary": "AI Product Manager and Technical Program Manager with experience in automation, no-code solutions, and cross-functional leadership.",
+  "skills": {
+    "languages": "Python, JavaScript, SQL",
+    "tools": "Jira, Notion, Git, AWS",
+    "ai": "ChatGPT, Claude, Prompt Engineering",
+    "methodologies": "Agile, Scrum, OKRs"
+  },
+  "targetRoles": [
+    "AI Product Manager",
+    "Technical Program Manager"
+  ],
+  "targetLocations": [
+    "Katy TX",
+    "Houston TX",
+    "Remote",
+    "Saudi Arabia",
+    "UAE"
+  ]
+}
