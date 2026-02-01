@@ -63,6 +63,80 @@ async function sendMessage(text, parseMode = 'HTML') {
 }
 
 /**
+ * Notify that job search is starting
+ */
+async function notifyStarting(query, location, limit) {
+    const message = `
+🚀 <b>Job Autopilot Starting!</b>
+
+🔍 <b>Search:</b> ${query}
+📍 <b>Location:</b> ${location}
+🎯 <b>Max applications:</b> ${limit}
+
+<i>I'll notify you as applications are submitted...</i>
+    `.trim();
+    return sendMessage(message);
+}
+
+/**
+ * Notify login status
+ */
+async function notifyLogin(success, method = 'cookies') {
+    if (success) {
+        return sendMessage(`🔐 Logged into LinkedIn (${method})`);
+    } else {
+        return sendMessage(`⚠️ LinkedIn login required - check browser`);
+    }
+}
+
+/**
+ * Notify jobs found
+ */
+async function notifyJobsFound(count, query) {
+    return sendMessage(`🔎 Found <b>${count}</b> Easy Apply jobs for "${query}"`);
+}
+
+/**
+ * Notify progress
+ */
+async function notifyProgress(current, total, successCount, failCount) {
+    const percent = Math.round((current / total) * 100);
+    const bar = '█'.repeat(Math.floor(percent / 10)) + '░'.repeat(10 - Math.floor(percent / 10));
+    
+    return sendMessage(`
+📊 <b>Progress: ${current}/${total}</b>
+
+${bar} ${percent}%
+
+✅ Submitted: ${successCount}
+❌ Failed: ${failCount}
+    `.trim());
+}
+
+/**
+ * Notify error
+ */
+async function notifyError(error, context = '') {
+    return sendMessage(`
+❌ <b>Error${context ? ` in ${context}` : ''}</b>
+
+<code>${error}</code>
+    `.trim());
+}
+
+/**
+ * Notify skipped job
+ */
+async function notifySkipped(job, reason) {
+    const reasons = {
+        'already_applied': '⏭️ Already applied',
+        'not_easy_apply': '⏭️ Not Easy Apply',
+        'external': '⏭️ External application'
+    };
+    return sendMessage(`${reasons[reason] || '⏭️ Skipped'}: ${job.title} @ ${job.company}`);
+}
+
+/**
  * Send job application notification
  */
 async function sendTelegramNotification(status, output = '') {
@@ -137,7 +211,13 @@ module.exports = {
     sendMessage,
     sendTelegramNotification,
     sendStatusUpdate,
-    notifyApplicationSubmitted
+    notifyApplicationSubmitted,
+    notifyStarting,
+    notifyLogin,
+    notifyJobsFound,
+    notifyProgress,
+    notifyError,
+    notifySkipped
 };
 
 // If run directly, send test message

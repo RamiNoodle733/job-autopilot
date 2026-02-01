@@ -1111,6 +1111,11 @@ class LinkedInAutoApply {
         console.log(`\n🚀 Starting mass apply: ${limit} jobs`);
         console.log(`   Query: "${query}" | Location: "${location}"`);
         
+        // Send Telegram notification that we're starting
+        if (telegramNotifier && process.env.TELEGRAM_BOT_TOKEN) {
+            telegramNotifier.notifyStarting(query, location, limit).catch(() => {});
+        }
+        
         const results = {
             applied: [],
             skipped: [],
@@ -1120,8 +1125,16 @@ class LinkedInAutoApply {
         
         if (!this.isLoggedIn) {
             if (!(await this.checkLoginStatus())) {
+                if (telegramNotifier && process.env.TELEGRAM_BOT_TOKEN) {
+                    telegramNotifier.notifyError('Not logged in to LinkedIn', 'login check').catch(() => {});
+                }
                 return { error: 'Not logged in. Run login() first.', ...results };
             }
+        }
+        
+        // Notify successful login
+        if (telegramNotifier && process.env.TELEGRAM_BOT_TOKEN) {
+            telegramNotifier.notifyLogin(true, 'cookies').catch(() => {});
         }
         
         // Search jobs
@@ -1144,6 +1157,11 @@ class LinkedInAutoApply {
             
             const jobs = await this.getJobListings();
             console.log(`   Found ${jobs.length} jobs on this page`);
+            
+            // Notify jobs found on first page
+            if (pageNum === 1 && telegramNotifier && process.env.TELEGRAM_BOT_TOKEN) {
+                telegramNotifier.notifyJobsFound(jobs.length, query).catch(() => {});
+            }
             
             if (jobs.length === 0) {
                 console.log('   ⚠️  No jobs found. Try different search terms.');
@@ -1190,6 +1208,10 @@ class LinkedInAutoApply {
                             ...job,
                             reason: result.skipReason
                         });
+                        // Notify skipped
+                        if (telegramNotifier && process.env.TELEGRAM_BOT_TOKEN) {
+                            telegramNotifier.notifySkipped(job, result.skipReason).catch(() => {});
+                        }
                     } else {
                         results.failed.push({
                             ...job,
@@ -1199,6 +1221,16 @@ class LinkedInAutoApply {
                     
                     processed++;
                     results.total = processed;
+                    
+                    // Send progress update every 5 applications
+                    if (processed % 5 === 0 && telegramNotifier && process.env.TELEGRAM_BOT_TOKEN) {
+                        telegramNotifier.notifyProgress(
+                            processed, 
+                            limit, 
+                            results.applied.length, 
+                            results.failed.length
+                        ).catch(() => {});
+                    }
                     
                     // Check rate limit
                     if (result.rateLimited) {
