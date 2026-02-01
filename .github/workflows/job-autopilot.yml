@@ -1,0 +1,104 @@
+name: Job Autopilot
+
+on:
+  # Run on schedule (9am CST = 3pm UTC)
+  schedule:
+    - cron: '0 15 * * 1-5'  # Weekdays at 9am CST
+  
+  # Manual trigger from GitHub UI or mobile app
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Max applications to submit'
+        required: false
+        default: '10'
+      platform:
+        description: 'Platform to use'
+        required: false
+        default: 'linkedin'
+        type: choice
+        options:
+          - linkedin
+          - indeed
+          - all
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chrome for Puppeteer
+        run: npx puppeteer browsers install chrome
+
+      - name: Create .env file
+        run: |
+          cat << EOF > .env
+          LINKEDIN_EMAIL=${{ secrets.LINKEDIN_EMAIL }}
+          LINKEDIN_PASSWORD=${{ secrets.LINKEDIN_PASSWORD }}
+          PHONE=${{ secrets.PHONE }}
+          GMAIL_USER=${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD=${{ secrets.GMAIL_APP_PASSWORD }}
+          JOB_SEARCH_QUERY=${{ secrets.JOB_SEARCH_QUERY }}
+          JOB_SEARCH_LOCATION=${{ secrets.JOB_SEARCH_LOCATION }}
+          TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}
+          EOF
+
+      - name: Restore LinkedIn cookies
+        if: ${{ secrets.LINKEDIN_COOKIES != '' }}
+        run: |
+          echo "${{ secrets.LINKEDIN_COOKIES }}" | base64 -d > data/linkedin-cookies.json
+
+      - name: Create data directory
+        run: mkdir -p data
+
+      - name: Run Job Autopilot
+        id: autopilot
+        run: |
+          node orchestrator.js mass-apply --limit ${{ github.event.inputs.limit || '10' }} --headless true 2>&1 | tee output.log
+          echo "output<<EOF" >> $GITHUB_OUTPUT
+          tail -50 output.log >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Send Telegram notification
+        if: always()
+        run: |
+          node -e "
+            const { sendTelegramNotification } = require('./src/telegram-notifier.js');
+            const status = '${{ job.status }}';
+            const output = process.env.OUTPUT;
+            sendTelegramNotification(status, output);
+          "
+        env:
+          OUTPUT: ${{ steps.autopilot.outputs.output }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+      - name: Save updated cookies
+        if: success()
+        run: |
+          if [ -f data/linkedin-cookies.json ]; then
+            echo "COOKIES_B64=$(base64 -w 0 data/linkedin-cookies.json)" >> $GITHUB_OUTPUT
+            echo "::notice::Update LINKEDIN_COOKIES secret with new cookies if login was required"
+          fi
+
+      - name: Upload debug screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots
+          path: debug-*.png
+          retention-days: 7
