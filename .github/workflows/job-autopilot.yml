@@ -5,9 +5,21 @@ on:
   schedule:
     - cron: '0 15 * * 1-5'  # Weekdays at 9am CST
   
+  # Triggered from Telegram bot
+  repository_dispatch:
+    types: [telegram_trigger]
+  
   # Manual trigger from GitHub UI or mobile app
   workflow_dispatch:
     inputs:
+      query:
+        description: 'Job search query'
+        required: false
+        default: ''
+      location:
+        description: 'Job location'
+        required: false
+        default: ''
       limit:
         description: 'Max applications to submit'
         required: false
@@ -45,17 +57,23 @@ jobs:
 
       - name: Create .env file
         run: |
+          # Use Telegram input, workflow input, or fallback to secret
+          QUERY="${{ github.event.client_payload.query || github.event.inputs.query || secrets.JOB_SEARCH_QUERY }}"
+          LOCATION="${{ github.event.client_payload.location || github.event.inputs.location || secrets.JOB_SEARCH_LOCATION }}"
+          
           cat << EOF > .env
           LINKEDIN_EMAIL=${{ secrets.LINKEDIN_EMAIL }}
           LINKEDIN_PASSWORD=${{ secrets.LINKEDIN_PASSWORD }}
           PHONE=${{ secrets.PHONE }}
           GMAIL_USER=${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD=${{ secrets.GMAIL_APP_PASSWORD }}
-          JOB_SEARCH_QUERY=${{ secrets.JOB_SEARCH_QUERY }}
-          JOB_SEARCH_LOCATION=${{ secrets.JOB_SEARCH_LOCATION }}
+          JOB_SEARCH_QUERY=${QUERY}
+          JOB_SEARCH_LOCATION=${LOCATION}
           TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_CHAT_ID=${{ github.event.client_payload.chat_id || secrets.TELEGRAM_CHAT_ID }}
           EOF
+          
+          echo "🔍 Searching for: ${QUERY} in ${LOCATION}"
 
       - name: Restore LinkedIn cookies
         if: ${{ secrets.LINKEDIN_COOKIES != '' }}

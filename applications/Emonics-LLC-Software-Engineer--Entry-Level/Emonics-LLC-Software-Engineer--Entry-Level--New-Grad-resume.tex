@@ -1,0 +1,133 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% ONE-PAGE RESUME TEMPLATE - Job Application Autopilot Pro
+% GUARANTEED 1 PAGE via compiler sizing profiles.
+% 
+% NOTE: This template is compiled with XeLaTeX.
+% The PDF compiler replaces sizing placeholders like {{FONT_SIZE}}.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\documentclass[{{FONT_SIZE}}pt,letterpaper]{article}
+
+% Page layout (auto-tuned)
+\usepackage[
+  top={{TOP_MARGIN}}in,
+  bottom={{BOTTOM_MARGIN}}in,
+  left={{SIDE_MARGIN}}in,
+  right={{SIDE_MARGIN}}in
+]{geometry}
+
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{parskip}
+\usepackage{setspace}
+
+\pagestyle{empty}
+
+% Colors
+\definecolor{headerblue}{RGB}{0, 51, 102}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=headerblue,
+  urlcolor=headerblue,
+  pdftitle={Rami Abdelrazzaq - Software Engineer, Entry Level (New Grad) - Resume},
+  pdfauthor={Rami Abdelrazzaq}
+}
+
+\titleformat{\section}
+  {\fontsize{ {{SECTION_FONT_SIZE}} }{ {{SECTION_LINE_HEIGHT}} }\selectfont\bfseries\color{headerblue}}
+  {}
+  {0em}
+  {}
+  [\vspace{-0.6em}\textcolor{headerblue}{\rule{\linewidth}{0.8pt}}\vspace{-0.3em}]
+\titlespacing*{\section}{0pt}{ {{SECTION_SPACE_BEFORE}}em }{ {{SECTION_SPACE_AFTER}}em }
+
+\setstretch{ {{LINE_SPACING}} }
+
+\setlist[itemize]{
+  leftmargin=1.4em,
+  itemsep={{ITEM_SEP}}pt,
+  parsep=0pt,
+  topsep={{LIST_TOP_SEP}}pt
+}
+
+\newcommand{\resumeItem}[1]{\item \small{#1}}
+\newcommand{\experienceEntry}[4]{%
+  \noindent\textbf{#1} \hfill \textit{#2}\\
+  \textit{#3} \hfill #4
+}
+
+\begin{document}
+
+% Header
+\begin{center}
+  {\fontsize{ {{NAME_FONT_SIZE}} }{ {{NAME_LINE_HEIGHT}} }\selectfont\bfseries\color{headerblue} Rami Abdelrazzaq}\\[0.2em]
+  {\small node orchestrator.js scrape linkedin --limit 3 \;|\; mkdir -p data \&\& cat > data/profile.json << 'EOF'\{  "firstName": "Rami",  "lastName": "Abdelrazzaq",  "email": "ramiabdelrazzaq@gmail.com",  "phone": "",  "location": "Katy, TX",  "linkedinHandle": "ramiabdelrazzaq",  "githubHandle": "RamiNoodle733",  "portfolioUrl": "",  "summary": "AI Product Manager and Technical Program Manager with experience in automation, no-code solutions, and cross-functional leadership.",  "skills": \{    "languages": "Python, JavaScript, SQL",    "tools": "Jira, Notion, Git, AWS",    "ai": "ChatGPT, Claude, Prompt Engineering",    "methodologies": "Agile, Scrum, OKRs"  \},  "targetRoles": ["AI Product Manager", "Technical Program Manager"],  "targetLocations": ["Katy TX", "Houston TX", "Remote", "Saudi Arabia", "UAE"]\}EOFecho "✅ Profile created" \;|\; node orchestrator.js init}\\[0.1em]
+  {\small \href{https://linkedin.com/in/sed -i 's/GMAIL\_APP\_PASSWORD=.*/GMAIL\_APP\_PASSWORD=gdvr raqj vtmb evag/' .env \&\& echo "✅ App Password updated"}{linkedin.com/in/sed -i 's/GMAIL\_APP\_PASSWORD=.*/GMAIL\_APP\_PASSWORD=gdvr raqj vtmb evag/' .env \&\& echo "✅ App Password updated"} \;|\;
+  \href{https://github.com/node orchestrator.js email test}{github.com/node orchestrator.js email test}}
+\end{center}
+
+\vspace{ {{HEADER_SPACE}}em }
+
+% Summary
+\section{Summary}
+AI Product Manager and Technical Program Manager with experience in automation, no-code solutions, and cross-functional leadership.
+
+% Skills
+\section{Skills}
+\begin{itemize}
+  \resumeItem{\textbf{Product/TPM:} Agile, Scrum, OKRs}
+  \resumeItem{\textbf{AI/Automation:} ChatGPT, Claude, Prompt Engineering}
+  \resumeItem{\textbf{Tools:} Jira, Notion, Git, AWS}
+\end{itemize}
+
+% Experience
+\section{Experience}
+
+\experienceEntry{AI Product / Program Projects (Vibe-Coding)}{2024 -- Present}{Self-Directed}{Remote}
+\begin{itemize}
+  \resumeItem{Built automation systems to streamline high-volume job applications (50+ per day), tracking outcomes in SQLite.}
+  \resumeItem{Designed prompt-driven workflows for tailoring resumes and outreach messaging to role requirements.}
+  \resumeItem{Led end-to-end delivery: requirements, iteration, QA, and deployment using AI-assisted tooling.}
+\end{itemize}
+
+\experienceEntry{Teaching Assistant}{Aug 2024 -- May 2025}{University of Houston}{Houston, TX}
+\begin{itemize}
+  \resumeItem{Coordinated office hours and support for 50+ students; communicated technical topics clearly and consistently.}
+  \resumeItem{Managed grading workflows and feedback loops; improved turnaround time and clarity for students.}
+\end{itemize}
+
+
+% Projects (optional but recommended)
+\section{Projects}
+
+\experienceEntry{Clawdbot Automation System}{2024}{Personal}{ }
+\begin{itemize}
+  \resumeItem{Personal AI assistant for workflow automation: scraping, scheduling, browser automation, and GitHub logging.}
+\end{itemize}
+
+\experienceEntry{Job Application Autopilot Pro}{2025}{Personal}{ }
+\begin{itemize}
+  \resumeItem{Built a daily pipeline: scrape roles, generate one-page PDFs, auto-apply (Easy Apply), and track follow-ups.}
+\end{itemize}
+
+
+% Education
+\section{Education}
+\experienceEntry{ B.S. Computer Science }{ May 2025 }{ University of Houston }{ Houston, TX }
+\begin{itemize}
+  \resumeItem{ Focus: AI, automation, and systems; strong communication and cross-functional collaboration. }
+\end{itemize}
+
+% Certifications
+\section{Certifications}
+\begin{itemize}
+  \resumeItem{ AWS Cloud Practitioner (in progress) }
+\end{itemize}
+
+\end{document}
