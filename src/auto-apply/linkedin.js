@@ -14,6 +14,14 @@ const puppeteer = require('puppeteer');
 const fs = require('fs-extra');
 const path = require('path');
 
+// Telegram notifier (optional - used in GitHub Actions)
+let telegramNotifier = null;
+try {
+    telegramNotifier = require('../telegram-notifier.js');
+} catch (e) {
+    // Telegram notifier not available
+}
+
 // Configuration
 const LINKEDIN_COOKIES_PATH = path.join(__dirname, '../../data/linkedin-cookies.json');
 const DEFAULT_DELAY_MS = 2000 + Math.random() * 3000; // 2-5 seconds between actions
@@ -1050,6 +1058,17 @@ class LinkedInAutoApply {
                 if (result.filled.length > 0) {
                     console.log(`    📝 Filled: ${result.filled.join(', ')}`);
                 }
+                
+                // Send Telegram notification for each successful application
+                if (telegramNotifier && process.env.TELEGRAM_BOT_TOKEN) {
+                    const jobInfo = {
+                        title: await this.getJobTitle(),
+                        company: await this.getCompanyName(),
+                        location: await this.getJobLocation(),
+                        url: this.page.url()
+                    };
+                    telegramNotifier.notifyApplicationSubmitted(jobInfo).catch(() => {});
+                }
             } else {
                 console.log(`    ❌ Application failed: ${result.error}`);
                 if (result.errors?.length > 0) {
@@ -1247,6 +1266,48 @@ class LinkedInAutoApply {
             return false;
         } catch (e) {
             return false;
+        }
+    }
+    
+    /**
+     * Get job title from current page
+     */
+    async getJobTitle() {
+        try {
+            return await this.page.evaluate(() => {
+                const el = document.querySelector('.job-details-jobs-unified-top-card__job-title, .jobs-unified-top-card__job-title, h1');
+                return el?.textContent?.trim() || 'Unknown Position';
+            });
+        } catch (e) {
+            return 'Unknown Position';
+        }
+    }
+    
+    /**
+     * Get company name from current page
+     */
+    async getCompanyName() {
+        try {
+            return await this.page.evaluate(() => {
+                const el = document.querySelector('.job-details-jobs-unified-top-card__company-name, .jobs-unified-top-card__company-name, [data-company-name]');
+                return el?.textContent?.trim() || 'Unknown Company';
+            });
+        } catch (e) {
+            return 'Unknown Company';
+        }
+    }
+    
+    /**
+     * Get job location from current page
+     */
+    async getJobLocation() {
+        try {
+            return await this.page.evaluate(() => {
+                const el = document.querySelector('.job-details-jobs-unified-top-card__bullet, .jobs-unified-top-card__bullet');
+                return el?.textContent?.trim() || '';
+            });
+        } catch (e) {
+            return '';
         }
     }
     
