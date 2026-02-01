@@ -8,7 +8,7 @@
  * 2. Paste this code
  * 3. Add environment variables (Settings → Variables):
  *    - TELEGRAM_BOT_TOKEN: Your bot token from @BotFather
- *    - GITHUB_TOKEN: Personal access token with 'repo' scope
+ *    - GH_PAT: Personal access token with 'repo' scope
  *    - TELEGRAM_CHAT_ID: Your chat ID (for security - only respond to you)
  * 4. Deploy and copy the worker URL
  * 5. Set webhook: https://api.telegram.org/bot<TOKEN>/setWebhook?url=<WORKER_URL>
@@ -129,7 +129,7 @@ I'll notify you when applications are submitted...
     {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${env.GITHUB_TOKEN}`,
+        'Authorization': `Bearer ${env.GH_PAT}`,
         'Accept': 'application/vnd.github.v3+json',
         'Content-Type': 'application/json',
         'User-Agent': 'Job-Autopilot-Bot'
@@ -161,7 +161,7 @@ async function checkWorkflowStatus(chatId, env) {
     'https://api.github.com/repos/RamiNoodle733/job-autopilot/actions/runs?per_page=1',
     {
       headers: {
-        'Authorization': `Bearer ${env.GITHUB_TOKEN}`,
+        'Authorization': `Bearer ${env.GH_PAT}`,
         'Accept': 'application/vnd.github.v3+json',
         'User-Agent': 'Job-Autopilot-Bot'
       }
@@ -198,7 +198,7 @@ async function cancelWorkflow(chatId, env) {
     'https://api.github.com/repos/RamiNoodle733/job-autopilot/actions/runs?status=in_progress&per_page=1',
     {
       headers: {
-        'Authorization': `Bearer ${env.GITHUB_TOKEN}`,
+        'Authorization': `Bearer ${env.GH_PAT}`,
         'Accept': 'application/vnd.github.v3+json',
         'User-Agent': 'Job-Autopilot-Bot'
       }
@@ -218,7 +218,7 @@ async function cancelWorkflow(chatId, env) {
     {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${env.GITHUB_TOKEN}`,
+        'Authorization': `Bearer ${env.GH_PAT}`,
         'Accept': 'application/vnd.github.v3+json',
         'User-Agent': 'Job-Autopilot-Bot'
       }
