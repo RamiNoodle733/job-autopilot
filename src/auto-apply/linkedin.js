@@ -94,6 +94,8 @@ class LinkedInAutoApply {
             slowMo: options.slowMo ?? 50,
             resumePath: options.resumePath,
             userAnswers: { ...DEFAULT_ANSWERS, ...options.userAnswers },
+            autoSubmit: options.autoSubmit ?? false,
+            dryRun: options.dryRun ?? false,
             profile: options.profile || {
                 firstName: 'Rami',
                 lastName: 'Abdelrazzaq',
@@ -561,6 +563,10 @@ class LinkedInAutoApply {
                 }
                 
                 if (submitBtn) {
+                    if (!this.options.autoSubmit || this.options.dryRun) {
+                        console.log('    🛑 Assisted mode: pausing before final submit.');
+                        return { success: false, requiresReview: true, ...results };
+                    }
                     // Final step - submit
                     console.log('    📤 Submitting application...');
                     try {
@@ -993,6 +999,19 @@ class LinkedInAutoApply {
             // Modal may already be closed
         }
     }
+
+    async detectFriction() {
+        try {
+            const content = await this.page.content();
+            const lower = content.toLowerCase();
+            if (lower.includes('captcha') || lower.includes('recaptcha')) return 'captcha';
+            if (lower.includes('two-factor') || lower.includes('2fa') || lower.includes('verification code')) return 'two-factor';
+            if (lower.includes('are you human')) return 'bot-check';
+        } catch (e) {
+            return null;
+        }
+        return null;
+    }
     
     /**
      * Apply to a specific job (main method) - works when job is already selected in view
@@ -1011,6 +1030,11 @@ class LinkedInAutoApply {
         try {
             // Wait a moment for job details to fully load
             await this.delay(2000);
+
+            const friction = await this.detectFriction();
+            if (friction) {
+                return { success: false, error: `Blocked by ${friction}`, blocked: true };
+            }
             
             // Debug: log current page state
             const pageInfo = await this.page.evaluate(() => ({

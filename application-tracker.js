@@ -3,80 +3,113 @@ const path = require('path');
 const fs = require('fs');
 
 class ApplicationTracker {
-  constructor() {
+  constructor({ dbPath } = {}) {
     const dbDir = path.join(__dirname, 'data');
     if (!fs.existsSync(dbDir)) {
       fs.mkdirSync(dbDir, { recursive: true });
     }
-    this.dbPath = path.join(dbDir, 'applications.db');
+    this.dbPath = dbPath || path.join(dbDir, 'applications.db');
     this.db = new sqlite3.Database(this.dbPath);
-    this.init();
+    this.ready = this.init();
   }
 
   init() {
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS applications (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        job_id TEXT UNIQUE,
-        source TEXT,
-        company TEXT NOT NULL,
-        title TEXT NOT NULL,
-        location TEXT,
-        salary TEXT,
-        description TEXT,
-        requirements TEXT,
-        url TEXT,
-        posted_date TEXT,
-        discovered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        status TEXT DEFAULT 'discovered',
-        tailored_at DATETIME,
-        resume_path TEXT,
-        cover_letter_path TEXT,
-        sent_at DATETIME,
-        email_sent_to TEXT,
-        response_received BOOLEAN DEFAULT 0,
-        interview_scheduled BOOLEAN DEFAULT 0,
-        rejected BOOLEAN DEFAULT 0,
-        notes TEXT,
-        priority INTEGER DEFAULT 0
-      )
-    `);
+    return new Promise((resolve, reject) => {
+      this.db.serialize(() => {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS applications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id TEXT UNIQUE,
+            job_url TEXT,
+            platform TEXT,
+            company TEXT,
+            title TEXT,
+            location TEXT,
+            status TEXT DEFAULT 'discovered',
+            status_detail TEXT,
+            failure_category TEXT,
+            notes TEXT,
+            discovered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            enriched_at DATETIME,
+            prepared_at DATETIME,
+            applied_at DATETIME,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            resume_path TEXT,
+            cover_letter_path TEXT,
+            artifact_paths TEXT,
+            metadata TEXT
+          );
 
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS daily_stats (
-        date TEXT PRIMARY KEY,
-        jobs_discovered INTEGER DEFAULT 0,
-        resumes_created INTEGER DEFAULT 0,
-        applications_sent INTEGER DEFAULT 0,
-        responses_received INTEGER DEFAULT 0
-      )
-    `);
+          CREATE TABLE IF NOT EXISTS daily_stats (
+            date TEXT PRIMARY KEY,
+            jobs_discovered INTEGER DEFAULT 0,
+            resumes_created INTEGER DEFAULT 0,
+            applications_sent INTEGER DEFAULT 0,
+            responses_received INTEGER DEFAULT 0
+          );
+        `, (error) => {
+          if (error) return reject(error);
+
+          this.ensureColumns([
+            'job_url',
+            'platform',
+            'status_detail',
+            'failure_category',
+            'enriched_at',
+            'prepared_at',
+            'applied_at',
+            'updated_at',
+            'resume_path',
+            'cover_letter_path',
+            'artifact_paths',
+            'metadata'
+          ]).then(resolve).catch(reject);
+        });
+      });
+    });
   }
 
-  addJob(job) {
+  ensureColumns(columns) {
     return new Promise((resolve, reject) => {
-      const jobId = `${job.source}-${Buffer.from(job.url).toString('base64').slice(0, 16)}`;
-      
+      this.db.all(`PRAGMA table_info(applications)`, (err, rows) => {
+        if (err) return reject(err);
+        const existing = new Set(rows.map((row) => row.name));
+        const missing = columns.filter((column) => !existing.has(column));
+        if (missing.length === 0) return resolve();
+
+        this.db.serialize(() => {
+          missing.forEach((column) => {
+            this.db.run(`ALTER TABLE applications ADD COLUMN ${column} TEXT`);
+          });
+          resolve();
+        });
+      });
+    });
+  }
+
+  async ensureReady() {
+    await this.ready;
+  }
+
+  async addJob(job) {
+    await this.ensureReady();
+    return new Promise((resolve, reject) => {
+      const jobId = job.job_id || `${job.platform || 'job'}-${Buffer.from(job.job_url || job.url || '').toString('base64').slice(0, 16)}`;
       const sql = `
         INSERT OR IGNORE INTO applications 
-        (job_id, source, company, title, location, salary, description, requirements, url, posted_date, priority)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (job_id, job_url, platform, company, title, location, status, metadata)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `;
-      
-      const priority = this.calculatePriority(job);
-      
+
       this.db.run(sql, [
         jobId,
-        job.source,
+        job.job_url || job.url,
+        job.platform || job.source,
         job.company,
         job.title,
         job.location,
-        job.salary,
-        job.description,
-        JSON.stringify(job.requirements),
-        job.url,
-        job.posted_date,
-        priority
+        job.status || 'discovered',
+        JSON.stringify(job.metadata || {})
       ], function(err) {
         if (err) reject(err);
         else resolve({ jobId, inserted: this.changes > 0 });
@@ -84,66 +117,20 @@ class ApplicationTracker {
     });
   }
 
-  calculatePriority(job) {
-    let priority = 0;
-    const loc = (job.location || '').toLowerCase();
-    const title = (job.title || '').toLowerCase();
-    
-    // Dream locations (Saudi/UAE)
-    if (loc.includes('saudi') || loc.includes('riyadh') || loc.includes('jeddah')) priority += 100;
-    if (loc.includes('uae') || loc.includes('dubai') || loc.includes('abudhabi')) priority += 90;
-    if (loc.includes('kuwait')) priority += 80;
-    
-    // Remote
-    if (loc.includes('remote')) priority += 50;
-    
-    // Preferred locations
-    if (loc.includes('houston') || loc.includes('katy')) priority += 40;
-    if (loc.includes('boston')) priority += 30;
-    
-    // Role alignment
-    if (title.includes('ai') || title.includes('artificial intelligence')) priority += 20;
-    if (title.includes('product manager') || title.includes('program manager')) priority += 15;
-    if (title.includes('engineer') && !title.includes('software engineer')) priority += 10;
-    
-    // Entry-level friendly
-    if (title.includes('junior') || title.includes('entry') || title.includes('new grad')) priority += 25;
-    
-    return priority;
-  }
-
-  getJobsByStatus(status, limit = 50) {
+  async updateJob(jobId, updates = {}) {
+    await this.ensureReady();
     return new Promise((resolve, reject) => {
-      this.db.all(
-        `SELECT * FROM applications WHERE status = ? ORDER BY priority DESC, discovered_at DESC LIMIT ?`,
-        [status, limit],
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        }
-      );
-    });
-  }
+      const fields = [];
+      const values = [];
 
-  updateStatus(jobId, status, extra = {}) {
-    return new Promise((resolve, reject) => {
-      const fields = ['status = ?'];
-      const values = [status];
-      
-      if (status === 'tailored') {
-        fields.push('tailored_at = CURRENT_TIMESTAMP');
-      }
-      if (status === 'sent') {
-        fields.push('sent_at = CURRENT_TIMESTAMP');
-      }
-      
-      Object.entries(extra).forEach(([key, value]) => {
+      Object.entries(updates).forEach(([key, value]) => {
         fields.push(`${key} = ?`);
-        values.push(value);
+        values.push(Array.isArray(value) || typeof value === 'object' ? JSON.stringify(value) : value);
       });
-      
+
+      fields.push('updated_at = CURRENT_TIMESTAMP');
       values.push(jobId);
-      
+
       this.db.run(
         `UPDATE applications SET ${fields.join(', ')} WHERE job_id = ?`,
         values,
@@ -155,35 +142,68 @@ class ApplicationTracker {
     });
   }
 
-  getStats() {
+  async getJob(jobId) {
+    await this.ensureReady();
     return new Promise((resolve, reject) => {
-      this.db.all(`
-        SELECT 
-          status,
-          COUNT(*) as count,
-          AVG(priority) as avg_priority
-        FROM applications 
-        GROUP BY status
-      `, (err, rows) => {
+      this.db.get(`SELECT * FROM applications WHERE job_id = ?`, [jobId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+  }
+
+  async getJobsByStatus(status, limit = 50) {
+    await this.ensureReady();
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        `SELECT * FROM applications WHERE status = ? ORDER BY discovered_at DESC LIMIT ?`,
+        [status, limit],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        }
+      );
+    });
+  }
+
+  async listJobs(limit = 100) {
+    await this.ensureReady();
+    return new Promise((resolve, reject) => {
+      this.db.all(`SELECT * FROM applications ORDER BY discovered_at DESC LIMIT ?`, [limit], (err, rows) => {
         if (err) reject(err);
         else resolve(rows);
       });
     });
   }
 
-  getTopTargets(limit = 10) {
+  async exportJson() {
+    await this.ensureReady();
     return new Promise((resolve, reject) => {
-      this.db.all(
-        `SELECT * FROM applications 
-         WHERE status = 'discovered' 
-         ORDER BY priority DESC 
-         LIMIT ?`,
-        [limit],
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        }
-      );
+      this.db.all(`SELECT * FROM applications ORDER BY discovered_at DESC`, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
+    });
+  }
+
+  async exportCsv() {
+    await this.ensureReady();
+    return new Promise((resolve, reject) => {
+      this.db.all(`SELECT * FROM applications ORDER BY discovered_at DESC`, (err, rows) => {
+        if (err) reject(err);
+        if (!rows.length) return resolve('');
+        const headers = Object.keys(rows[0]);
+        const csvRows = [headers.join(',')];
+        rows.forEach((row) => {
+          const values = headers.map((header) => {
+            const value = row[header];
+            if (value === null || value === undefined) return '';
+            return `"${String(value).replace(/"/g, '""')}"`;
+          });
+          csvRows.push(values.join(','));
+        });
+        resolve(csvRows.join('\n'));
+      });
     });
   }
 
