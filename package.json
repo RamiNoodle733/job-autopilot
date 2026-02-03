@@ -3,12 +3,16 @@
   "version": "1.0.0",
   "description": "Automated job search and application system for Rami",
   "main": "orchestrator.js",
+  "bin": {
+    "job-autopilot": "src/cli.js"
+  },
   "scripts": {
     "start": "node orchestrator.js",
     "scrape": "node orchestrator.js scrape",
     "tailor": "node orchestrator.js tailor",
     "send": "node orchestrator.js send",
     "report": "node orchestrator.js report",
+    "cli": "node src/cli.js",
     "test": "node --test src/**/*.test.js",
     "init-db": "node src/init-database.js"
   },

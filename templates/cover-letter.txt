@@ -1,0 +1,22 @@
+{{DATE}}
+
+{{COMPANY_NAME}}
+{{COMPANY_LOCATION}}
+
+Re: {{ROLE_TITLE}}
+
+Hello {{COMPANY_NAME}} Hiring Team,
+
+I am excited to apply for the {{ROLE_TITLE}} role at {{COMPANY_NAME}}. I bring experience in automation, product delivery, and cross-functional collaboration, and I’m eager to contribute to {{COMPANY_NAME}}.
+
+Highlights:
+- Built automation workflows for high-volume job applications and tracking.
+- Delivered user-focused products with iterative feedback loops.
+- Comfortable with rapid learning and ambiguous environments.
+
+Thank you for your time and consideration. I’d welcome the opportunity to discuss how I can help {{COMPANY_NAME}}.
+
+Sincerely,
+{{CANDIDATE_NAME}}
+{{CANDIDATE_EMAIL}}
+{{CANDIDATE_PHONE}}
