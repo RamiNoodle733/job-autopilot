@@ -425,21 +425,99 @@ program
         await autopilot.run();
     });
 
-// Quick commands
+// Quick commands - LinkedIn Direct (bypasses aggregator)
 program
     .command('linkedin [query]')
-    .description('Apply only via LinkedIn. Usage: linkedin "data scientist"')
+    .description('Apply directly via LinkedIn Easy Apply. Usage: linkedin "data scientist"')
     .option('-l, --location <location>', 'Location', '')
     .option('--limit <number>', 'Max applications', '25')
+    .option('--headless', 'Run in headless mode', false)
     .action(async (query, options) => {
         loadEnv();
-        const autopilot = new UltimateJobAutopilot({
-            query: query || 'software engineer',
-            location: options.location,
-            limit: parseInt(options.limit),
-            platforms: ['linkedin']
-        });
-        await autopilot.run();
+        const searchQuery = query || 'software engineer';
+        const location = options.location || '';
+        const limit = parseInt(options.limit) || 25;
+
+        logger.info('\n' + '='.repeat(60));
+        logger.info('🔗 LINKEDIN DIRECT AUTO-APPLY');
+        logger.info('='.repeat(60));
+        logger.info(`   Query: ${searchQuery}`);
+        logger.info(`   Location: ${location || 'Anywhere'}`);
+        logger.info(`   Limit: ${limit} applications`);
+        logger.info('='.repeat(60) + '\n');
+
+        try {
+            const { LinkedInAutoApply } = require('./auto-apply/linkedin');
+            const profile = loadProfile();
+
+            const linkedIn = new LinkedInAutoApply({
+                headless: options.headless,
+                maxApps: limit,
+                profile: {
+                    firstName: profile.name?.split(' ')[0] || 'Unknown',
+                    lastName: profile.name?.split(' ').slice(1).join(' ') || '',
+                    email: profile.email || process.env.GMAIL_USER,
+                    phone: profile.phone || process.env.PHONE,
+                    city: profile.location?.city || '',
+                    state: profile.location?.state || '',
+                    linkedinHandle: profile.socials?.linkedin?.split('/').pop() || '',
+                    githubHandle: profile.socials?.github?.split('/').pop() || ''
+                }
+            });
+
+            await linkedIn.init();
+            let loggedIn = await linkedIn.checkLoginStatus();
+
+            if (!loggedIn) {
+                logger.info('⚠️  Not logged in to LinkedIn. Attempting auto-login...');
+                if (process.env.LINKEDIN_EMAIL && process.env.LINKEDIN_PASSWORD) {
+                    try {
+                        await linkedIn.login(process.env.LINKEDIN_EMAIL, process.env.LINKEDIN_PASSWORD);
+                        loggedIn = await linkedIn.checkLoginStatus();
+                    } catch (loginError) {
+                        logger.error(`❌ Login failed: ${loginError.message}`);
+                    }
+                    
+                    if (!loggedIn) {
+                        logger.error('❌ LinkedIn login failed. Cookies may have expired.');
+                        logger.info('💡 To fix: Run without --headless to login manually, then re-run with --headless');
+                        await linkedIn.close();
+                        return;
+                    }
+                } else {
+                    logger.error('❌ No LinkedIn credentials in .env - cannot login');
+                    await linkedIn.close();
+                    return;
+                }
+            } else {
+                logger.info('✅ Already logged in via saved cookies');
+            }
+
+            // Run the LinkedIn mass apply directly
+            const results = await linkedIn.massApply(searchQuery, location, limit);
+
+            await linkedIn.close();
+
+            logger.info('\n' + '='.repeat(60));
+            logger.info('📊 LINKEDIN RESULTS');
+            logger.info('='.repeat(60));
+            logger.info(`   Applied: ${results.applied?.length || 0}`);
+            logger.info(`   Skipped: ${results.skipped?.length || 0}`);
+            logger.info(`   Failed: ${results.failed?.length || 0}`);
+            logger.info('='.repeat(60) + '\n');
+
+            await sendTelegramNotification(
+                `🔗 LinkedIn Auto-Apply Complete!\n\n` +
+                `📝 Query: ${searchQuery}\n` +
+                `✅ Applied: ${results.applied?.length || 0}\n` +
+                `⏭️ Skipped: ${results.skipped?.length || 0}\n` +
+                `❌ Failed: ${results.failed?.length || 0}`
+            );
+
+        } catch (error) {
+            logger.error(`❌ LinkedIn error: ${error.message}`);
+            console.error(error);
+        }
     });
 
 program

@@ -8,9 +8,13 @@
  * - Handle "Apply" vs "Easy Apply" buttons
  * - Rate limiting to avoid bans
  * - Session persistence for avoiding re-login
+ * - Stealth mode to evade bot detection
  */
 
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+puppeteer.use(StealthPlugin());
+
 const fs = require('fs-extra');
 const path = require('path');
 
@@ -116,7 +120,7 @@ class LinkedInAutoApply {
         console.log('🌐 Initializing LinkedIn automation...');
         
         this.browser = await puppeteer.launch({
-            headless: this.options.headless,
+            headless: this.options.headless ? 'new' : false,
             slowMo: this.options.slowMo,
             args: [
                 '--no-sandbox',
@@ -125,7 +129,9 @@ class LinkedInAutoApply {
                 '--disable-infobars',
                 '--window-size=1366,768',
                 '--disable-gpu',
-                '--disable-dev-shm-usage'
+                '--disable-dev-shm-usage',
+                '--disable-features=IsolateOrigins,site-per-process',
+                '--ignore-certificate-errors'
             ],
             defaultViewport: { width: 1366, height: 768 },
             timeout: 60000
@@ -136,6 +142,23 @@ class LinkedInAutoApply {
         // Set longer default timeout
         this.page.setDefaultTimeout(60000);
         this.page.setDefaultNavigationTimeout(60000);
+        
+        // Additional anti-detection measures
+        await this.page.evaluateOnNewDocument(() => {
+            // Overwrite the navigator properties
+            Object.defineProperty(navigator, 'webdriver', { get: () => false });
+            
+            // Pass Chrome runtime check
+            window.chrome = { runtime: {} };
+            
+            // Pass permissions check
+            const originalQuery = window.navigator.permissions.query;
+            window.navigator.permissions.query = (parameters) => (
+                parameters.name === 'notifications' 
+                    ? Promise.resolve({ state: Notification.permission }) 
+                    : originalQuery(parameters)
+            );
+        });
         
         // Set user agent to avoid detection
         await this.page.setUserAgent(
@@ -197,14 +220,14 @@ class LinkedInAutoApply {
                 return isLoggedIn;
             }
             
-            // Navigate to feed to verify login
+            // Navigate to feed to verify login - use domcontentloaded for faster check
             await this.page.goto('https://www.linkedin.com/feed/', { 
-                waitUntil: 'networkidle2',
-                timeout: 30000 
+                waitUntil: 'domcontentloaded',
+                timeout: 45000 
             });
             
-            // Wait for page to settle
-            await this.delay(2000);
+            // Give the page a moment to redirect if not logged in
+            await this.delay(3000);
             
             const finalUrl = this.page.url();
             const isLoggedIn = !finalUrl.includes('/login') && 
@@ -215,6 +238,14 @@ class LinkedInAutoApply {
             return isLoggedIn;
         } catch (error) {
             console.log('  ⚠️  Error checking login status:', error.message);
+            // Try a simpler check - just see if we can get the current page
+            try {
+                const url = this.page.url();
+                if (url.includes('/feed') || url.includes('/jobs')) {
+                    this.isLoggedIn = true;
+                    return true;
+                }
+            } catch (e) {}
             this.isLoggedIn = false;
             return false;
         }
@@ -228,12 +259,12 @@ class LinkedInAutoApply {
         
         try {
             await this.page.goto('https://www.linkedin.com/login', {
-                waitUntil: 'networkidle2',
-                timeout: 30000
+                waitUntil: 'domcontentloaded',
+                timeout: 45000
             });
             
             // Wait for form
-            await this.page.waitForSelector('#username', { timeout: 10000 });
+            await this.page.waitForSelector('#username', { timeout: 15000 });
             
             // Clear and fill email
             await this.page.click('#username', { clickCount: 3 });
@@ -247,7 +278,7 @@ class LinkedInAutoApply {
             console.log('  📝 Submitting credentials...');
             await Promise.all([
                 this.page.click('.login__form_action_container button'),
-                this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {})
+                this.page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
             ]);
             
             // Wait for potential security challenges
@@ -286,20 +317,42 @@ class LinkedInAutoApply {
     async searchJobs(query, location, easyApplyOnly = true) {
         console.log(`\n🔍 Searching: "${query}" in "${location}"`);
         
-        let url = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}`;
+        // Build search URL with filters - use geoId for US to avoid personalization
+        let url = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(query)}`;
+        
+        if (location) {
+            url += `&location=${encodeURIComponent(location)}`;
+        } else {
+            // Default to United States for more results
+            url += '&geoId=103644278'; // US geoId
+        }
         
         if (easyApplyOnly) {
             url += '&f_AL=true'; // Easy Apply filter
         }
         
+        // Experience level: entry level (f_E=2)
+        url += '&f_E=2'; // 1=Internship, 2=Entry, 3=Associate, 4=Mid-Senior, 5=Director, 6=Executive
+        
         // Additional filters for recency
         url += '&f_TPR=r604800'; // Past week
+        
+        // Sort by most recent
+        url += '&sortBy=DD';
+        
+        // Refresh search (avoid caching)
+        url += '&refresh=true';
+        
+        console.log(`   📎 Search URL: ${url}`);
         
         try {
             await this.page.goto(url, { 
                 waitUntil: 'domcontentloaded', 
                 timeout: 60000 
             });
+            
+            // Wait for the page to settle and re-navigate to ensure fresh results
+            await this.delay(2000);
             
             // Wait for job listings to appear
             await this.page.waitForSelector('.job-card-container, .jobs-search-results__list-item, .scaffold-layout__list-container', { 
@@ -1164,6 +1217,26 @@ class LinkedInAutoApply {
         // Search jobs
         await this.searchJobs(query, location, true);
         await this.delay(3000);
+        
+        // Debug: save screenshot and current URL
+        console.log(`   🔗 Current URL: ${this.page.url()}`);
+        try {
+            await this.page.screenshot({ path: '/tmp/linkedin-search.png', fullPage: false });
+            console.log(`   📸 Screenshot saved to /tmp/linkedin-search.png`);
+            
+            // Debug: Get job titles from the page
+            const debugTitles = await this.page.evaluate(() => {
+                const titles = [];
+                document.querySelectorAll('.job-card-list__title, .job-card-container__link, [class*="job-card"] a').forEach(el => {
+                    const text = el.textContent?.trim();
+                    if (text && text.length > 3 && text.length < 100) titles.push(text);
+                });
+                return titles.slice(0, 5);
+            });
+            console.log(`   🏷️ Sample job titles: ${debugTitles.join(' | ') || 'none found'}`);
+        } catch (e) {
+            console.log(`   ⚠️ Debug error: ${e.message}`);
+        }
         
         let processed = 0;
         let pageNum = 1;

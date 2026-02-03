@@ -39,6 +39,8 @@
     "fs-extra": "^11.3.3",
     "nodemailer": "^7.0.13",
     "puppeteer": "^24.36.1",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "sqlite3": "^5.1.7"
   },
   "engines": {
