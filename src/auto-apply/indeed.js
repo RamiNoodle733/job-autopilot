@@ -107,7 +107,7 @@ class IndeedAutoApply {
             const continueBtn = await this.page.$('button[type="submit"]');
             if (continueBtn) await continueBtn.click();
             
-            await this.page.waitForTimeout(2000);
+            await new Promise(r => setTimeout(r, 2000));
 
             // Enter password
             await this.page.waitForSelector('input[name="__password"]', { timeout: 5000 });
@@ -254,7 +254,7 @@ class IndeedAutoApply {
     async applyToJob(job) {
         // Navigate to job page
         await this.page.goto(job.url, { waitUntil: 'networkidle2' });
-        await this.page.waitForTimeout(2000);
+        await new Promise(r => setTimeout(r, 2000));
 
         // Look for apply button
         const applyButton = await this.findApplyButton();
@@ -268,7 +268,7 @@ class IndeedAutoApply {
                              !buttonText.toLowerCase().includes('company site');
 
         await applyButton.click();
-        await this.page.waitForTimeout(3000);
+        await new Promise(r => setTimeout(r, 3000));
 
         if (isIndeedApply) {
             return this.handleIndeedApply(job);
@@ -307,7 +307,7 @@ class IndeedAutoApply {
         logger.info('   📝 Using Indeed Apply...');
 
         // Wait for modal/iframe
-        await this.page.waitForTimeout(2000);
+        await new Promise(r => setTimeout(r, 2000));
 
         // Check for iframe (Indeed often uses an iframe for the apply form)
         const frames = await this.page.frames();
@@ -324,7 +324,7 @@ class IndeedAutoApply {
 
             // Fill form fields
             await this.fillIndeedForm(targetPage, job);
-            await this.page.waitForTimeout(1000);
+            await new Promise(r => setTimeout(r, 1000));
 
             // Look for continue/submit button
             const { isSubmit, button } = await this.findFormNavButton(targetPage);
@@ -334,7 +334,7 @@ class IndeedAutoApply {
             }
 
             await button.click();
-            await this.page.waitForTimeout(2000);
+            await new Promise(r => setTimeout(r, 2000));
 
             if (isSubmit) {
                 // Check for success
@@ -496,7 +496,7 @@ class IndeedAutoApply {
         logger.info('   ↗️ External application - redirecting...');
         
         // Wait for new tab/redirect
-        await this.page.waitForTimeout(3000);
+        await new Promise(r => setTimeout(r, 3000));
         
         const currentUrl = this.page.url();
         

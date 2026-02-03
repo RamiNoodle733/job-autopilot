@@ -1,0 +1,49 @@
+{
+  "timestamp": "2026-02-03T17:49:31.456Z",
+  "options": {
+    "headless": true,
+    "limit": 20,
+    "platforms": [
+      "linkedin",
+      "indeed",
+      "google",
+      "companies"
+    ],
+    "query": "entry level data scientist",
+    "location": "",
+    "targetCompanies": [
+      "Google",
+      "Meta",
+      "Apple",
+      "Amazon",
+      "Microsoft",
+      "Netflix",
+      "Nvidia",
+      "OpenAI",
+      "Anthropic",
+      "Stripe",
+      "Airbnb",
+      "Uber",
+      "Salesforce",
+      "Adobe",
+      "Slack",
+      "Dropbox",
+      "Twitter/X",
+      "LinkedIn",
+      "Spotify",
+      "Pinterest"
+    ],
+    "remoteOnly": false,
+    "experienceLevel": "entry",
+    "skipApplied": true,
+    "tailorResume": true,
+    "dryRun": false
+  },
+  "stats": {
+    "jobsFound": 0,
+    "applied": 0,
+    "failed": 0,
+    "skipped": 0,
+    "byPlatform": {}
+  }
+}

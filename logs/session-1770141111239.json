@@ -1,0 +1,46 @@
+{
+  "timestamp": "2026-02-03T17:51:51.239Z",
+  "options": {
+    "headless": true,
+    "limit": 25,
+    "platforms": [
+      "linkedin"
+    ],
+    "query": "software engineer",
+    "location": "",
+    "targetCompanies": [
+      "Google",
+      "Meta",
+      "Apple",
+      "Amazon",
+      "Microsoft",
+      "Netflix",
+      "Nvidia",
+      "OpenAI",
+      "Anthropic",
+      "Stripe",
+      "Airbnb",
+      "Uber",
+      "Salesforce",
+      "Adobe",
+      "Slack",
+      "Dropbox",
+      "Twitter/X",
+      "LinkedIn",
+      "Spotify",
+      "Pinterest"
+    ],
+    "remoteOnly": false,
+    "experienceLevel": "entry",
+    "skipApplied": true,
+    "tailorResume": true,
+    "dryRun": false
+  },
+  "stats": {
+    "jobsFound": 0,
+    "applied": 0,
+    "failed": 0,
+    "skipped": 0,
+    "byPlatform": {}
+  }
+}

@@ -488,7 +488,7 @@ class UniversalFormFiller {
             }
             
             await nextButton.click();
-            await page.waitForTimeout(2000); // Wait for page transition
+            await new Promise(r => setTimeout(r, 2000)); // Wait for page transition
             pageNum++;
         }
 

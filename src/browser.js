@@ -27,7 +27,7 @@ async function navigateWithRetries(page, url, { retries = 2, delayMs = 2000 } = 
       return true;
     } catch (error) {
       if (attempt === retries) throw error;
-      await page.waitForTimeout(delayMs * (attempt + 1));
+      await new Promise(r => setTimeout(r, delayMs * (attempt + 1)));
     }
   }
   return false;

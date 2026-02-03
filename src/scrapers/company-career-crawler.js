@@ -301,7 +301,7 @@ class CompanyCareerCrawler {
                 if (searchInput) {
                     await searchInput.type(query);
                     await this.page.keyboard.press('Enter');
-                    await this.page.waitForTimeout(3000);
+                    await new Promise(r => setTimeout(r, 3000));
                 }
             }
 
@@ -331,7 +331,7 @@ class CompanyCareerCrawler {
             await this.page.goto(url, { waitUntil: 'networkidle2' });
             
             // Wait a bit for dynamic content
-            await this.page.waitForTimeout(2000);
+            await new Promise(r => setTimeout(r, 2000));
 
             const jobs = await this.page.evaluate((searchQuery) => {
                 // Try various common patterns for job listings

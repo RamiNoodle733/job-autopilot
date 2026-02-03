@@ -95,7 +95,7 @@ class GenericFormApplyAdapter extends ApplyAdapter {
 
     try {
       await navigateWithRetries(page, job.job_url || job.url, { retries: 2, delayMs: 2000 });
-      await page.waitForTimeout(1500);
+      await new Promise(r => setTimeout(r, 1500));
       const friction = await detectFriction(page);
       if (friction) {
         const artifacts = await captureArtifacts(page, runDir, `friction-${Date.now()}`);

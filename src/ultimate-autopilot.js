@@ -427,15 +427,14 @@ program
 
 // Quick commands
 program
-    .command('linkedin')
-    .description('Apply only via LinkedIn')
-    .option('-q, --query <query>', 'Search query', 'software engineer')
+    .command('linkedin [query]')
+    .description('Apply only via LinkedIn. Usage: linkedin "data scientist"')
     .option('-l, --location <location>', 'Location', '')
     .option('--limit <number>', 'Max applications', '25')
-    .action(async (options) => {
+    .action(async (query, options) => {
         loadEnv();
         const autopilot = new UltimateJobAutopilot({
-            query: options.query,
+            query: query || 'software engineer',
             location: options.location,
             limit: parseInt(options.limit),
             platforms: ['linkedin']
@@ -444,15 +443,14 @@ program
     });
 
 program
-    .command('indeed')
-    .description('Apply only via Indeed')
-    .option('-q, --query <query>', 'Search query', 'software engineer')
+    .command('indeed [query]')
+    .description('Apply only via Indeed. Usage: indeed "data scientist"')
     .option('-l, --location <location>', 'Location', '')
     .option('--limit <number>', 'Max applications', '25')
-    .action(async (options) => {
+    .action(async (query, options) => {
         loadEnv();
         const autopilot = new UltimateJobAutopilot({
-            query: options.query,
+            query: query || 'software engineer',
             location: options.location,
             limit: parseInt(options.limit),
             platforms: ['indeed']
@@ -461,15 +459,14 @@ program
     });
 
 program
-    .command('discover')
+    .command('discover [query]')
     .description('Discover jobs without applying (dry run)')
-    .option('-q, --query <query>', 'Search query', 'software engineer')
     .option('-l, --location <location>', 'Location', '')
     .option('--limit <number>', 'Max jobs to find', '100')
-    .action(async (options) => {
+    .action(async (query, options) => {
         loadEnv();
         const autopilot = new UltimateJobAutopilot({
-            query: options.query,
+            query: query || 'software engineer',
             location: options.location,
             limit: parseInt(options.limit),
             dryRun: true
@@ -478,14 +475,13 @@ program
     });
 
 program
-    .command('companies <companies>')
-    .description('Target specific companies')
-    .option('-q, --query <query>', 'Search query', 'software engineer')
-    .action(async (companies, options) => {
+    .command('companies <companies> [query]')
+    .description('Target specific companies. Usage: companies "Google,Meta" "data scientist"')
+    .action(async (companies, query) => {
         loadEnv();
         const companyList = companies.split(',').map(c => c.trim());
         const autopilot = new UltimateJobAutopilot({
-            query: options.query,
+            query: query || 'software engineer',
             targetCompanies: companyList,
             platforms: ['companies', 'google']
         });

@@ -62,7 +62,7 @@ class GlassdoorScraper {
             if (!hasNext) break;
             
             page++;
-            await this.page.waitForTimeout(2000);
+            await new Promise(r => setTimeout(r, 2000));
         }
 
         return jobs.slice(0, limit);
