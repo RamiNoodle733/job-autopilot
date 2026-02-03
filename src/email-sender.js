@@ -449,4 +449,35 @@ class EmailSender {
 }
 
 // Export class and templates for customization
-module.exports = { EmailSender, TEMPLATES };
+// Also re-export Telegram functions for convenience
+const telegram = require('./telegram-notifier');
+
+// Emoji constants for Telegram messages
+const TELEGRAM_EMOJIS = {
+    rocket: '🚀',
+    success: '✅',
+    error: '❌',
+    warning: '⚠️',
+    search: '🔍',
+    job: '💼',
+    company: '🏢',
+    location: '📍',
+    stats: '📊',
+    trophy: '🏆',
+    clock: '🕐',
+    target: '🎯',
+    progress: '📈',
+    info: 'ℹ️',
+    star: '⭐'
+};
+
+module.exports = { 
+    EmailSender, 
+    TEMPLATES,
+    // Re-export Telegram functions
+    sendTelegramNotification: telegram.sendMessage,
+    sendMessage: telegram.sendMessage,
+    TELEGRAM_EMOJIS,
+    ...telegram
+};
+

@@ -1,13 +1,19 @@
 {
   "name": "job-application-autopilot",
-  "version": "1.0.0",
-  "description": "Automated job search and application system for Rami",
+  "version": "2.0.0",
+  "description": "Ultimate AI Job Autopilot - Apply everywhere automatically",
   "main": "orchestrator.js",
   "bin": {
-    "job-autopilot": "src/cli.js"
+    "job-autopilot": "src/cli.js",
+    "autopilot": "src/ultimate-autopilot.js"
   },
   "scripts": {
     "start": "node orchestrator.js",
+    "autopilot": "node src/ultimate-autopilot.js",
+    "linkedin": "node src/ultimate-autopilot.js linkedin",
+    "indeed": "node src/ultimate-autopilot.js indeed",
+    "discover": "node src/ultimate-autopilot.js discover",
+    "companies": "node src/ultimate-autopilot.js companies",
     "scrape": "node orchestrator.js scrape",
     "tailor": "node orchestrator.js tailor",
     "send": "node orchestrator.js send",
@@ -28,6 +34,7 @@
     "axios": "^1.13.4",
     "better-sqlite3": "^12.6.2",
     "cheerio": "^1.2.0",
+    "commander": "^12.1.0",
     "dotenv": "^17.2.3",
     "fs-extra": "^11.3.3",
     "nodemailer": "^7.0.13",

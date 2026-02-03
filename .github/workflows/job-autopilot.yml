@@ -88,10 +88,26 @@ jobs:
       - name: Run Job Autopilot
         id: autopilot
         run: |
-          node orchestrator.js mass-apply --limit ${{ github.event.inputs.limit || '10' }} --headless true 2>&1 | tee output.log
+          # Determine platform
+          PLATFORM="${{ github.event.client_payload.platform || github.event.inputs.platform || 'linkedin' }}"
+          LIMIT="${{ github.event.client_payload.limit || github.event.inputs.limit || '10' }}"
+          
+          if [ "$PLATFORM" = "all" ]; then
+            # Run the ultimate autopilot (all platforms)
+            node src/ultimate-autopilot.js --query "${{ env.JOB_SEARCH_QUERY }}" --location "${{ env.JOB_SEARCH_LOCATION }}" --limit $LIMIT 2>&1 | tee output.log
+          elif [ "$PLATFORM" = "indeed" ]; then
+            node src/ultimate-autopilot.js indeed --query "${{ env.JOB_SEARCH_QUERY }}" --location "${{ env.JOB_SEARCH_LOCATION }}" --limit $LIMIT 2>&1 | tee output.log
+          else
+            # LinkedIn (default)
+            node src/ultimate-autopilot.js linkedin --query "${{ env.JOB_SEARCH_QUERY }}" --location "${{ env.JOB_SEARCH_LOCATION }}" --limit $LIMIT 2>&1 | tee output.log
+          fi
+          
           echo "output<<EOF" >> $GITHUB_OUTPUT
           tail -50 output.log >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+        env:
+          JOB_SEARCH_QUERY: ${{ github.event.client_payload.query || github.event.inputs.query || secrets.JOB_SEARCH_QUERY || 'software engineer' }}
+          JOB_SEARCH_LOCATION: ${{ github.event.client_payload.location || github.event.inputs.location || secrets.JOB_SEARCH_LOCATION || '' }}
 
       - name: Send Telegram notification
         if: always()
