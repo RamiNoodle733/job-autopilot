@@ -12,63 +12,40 @@ jobs:
   extract:
     if: github.head_ref == 'tmp/ulamaa-playlist-transcripts-20260719'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Fetch transcript API documents
+      - name: Fetch Arabic original transcript for lesson 4 part 2
         run: |
           python -m pip install requests
-          cat > /tmp/fetch.py <<'PY'
-          import json, time
+          python - <<'PY'
           from pathlib import Path
-          import requests
-
-          videos = [
-            (1,'gNq70iuIQvs','L1 | Introduction to Nahwu'),
-            (2,'MQ8GC7Vgjek','L2 | Introduction to Nahwu'),
-            (3,'aJlycNt4Kqc','L3 | Introduction to Nahwu'),
-            (4,'sfS0-k6RVsY','L4 P1 | Introduction to Nahwu'),
-            (5,'KwvY8RxGP_A','L4 P2 | Introduction to Nahwu'),
-            (6,'oAfS4OOrBy0','L5 | Introduction to Nahwu'),
-            (7,'fZiH3U4thNk','L6 | Introduction to Nahwu'),
-            (8,'30BDuxItSg0','L7 | Introduction to Nahwu'),
-            (9,'Y9Mq5JIvOME','L8 | Introduction to Nahwu'),
-          ]
-          out=Path('transcript_api_results'); out.mkdir(exist_ok=True)
+          import json, requests
+          out=Path('specific_language_transcripts'); out.mkdir(exist_ok=True)
+          urls={
+            '005_KwvY8RxGP_A_ar_orig.txt':'https://youtube-transcript.ai/transcript/KwvY8RxGP_A.txt?lang=a-ar-orig',
+            '005_KwvY8RxGP_A_ar.txt':'https://youtube-transcript.ai/transcript/KwvY8RxGP_A.txt?lang=a-ar',
+            '009_Y9Mq5JIvOME_ar.txt':'https://youtube-transcript.ai/transcript/Y9Mq5JIvOME.txt?lang=a-ar',
+          }
+          summary=[]
           s=requests.Session(); s.headers['User-Agent']='Mozilla/5.0'
-          results=[]
-          for i,vid,title in videos:
-            urls=[
-              f'https://youtube-transcript.ai/transcript/{vid}.txt',
-              f'https://youtube-transcript.ai/transcript/{vid}.txt?lang=en',
-            ]
-            best=None
-            attempts=[]
-            for url in urls:
-              try:
-                r=s.get(url,timeout=180)
-                attempts.append({'url':url,'status':r.status_code,'size':len(r.content),'type':r.headers.get('content-type'),'preview':r.text[:300]})
-                if r.ok and len(r.text)>300 and 'error' not in r.text[:200].lower():
-                  best=r.text
-                  break
-              except Exception as e:
-                attempts.append({'url':url,'error':repr(e)})
-              time.sleep(2)
-            (out/f'{i:03d}_{vid}_attempts.json').write_text(json.dumps(attempts,ensure_ascii=False,indent=2),encoding='utf-8')
-            if best:
-              (out/f'{i:03d}_{vid}.txt').write_text(best,encoding='utf-8')
-            results.append({'index':i,'video_id':vid,'title':title,'success':bool(best),'chars':len(best or '')})
-          (out/'summary.json').write_text(json.dumps(results,ensure_ascii=False,indent=2),encoding='utf-8')
-          print(json.dumps(results,ensure_ascii=False,indent=2))
+          for name,url in urls.items():
+            try:
+              r=s.get(url,timeout=180)
+              (out/name).write_bytes(r.content)
+              summary.append({'name':name,'url':url,'status':r.status_code,'size':len(r.content),'preview':r.text[:200]})
+            except Exception as e:
+              summary.append({'name':name,'url':url,'error':repr(e)})
+          (out/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding='utf-8')
+          print(json.dumps(summary,ensure_ascii=False,indent=2))
           PY
-          python /tmp/fetch.py
       - name: Upload results
         uses: actions/upload-artifact@v4
         with:
-          name: ulamaa-transcript-api-results
-          path: transcript_api_results
+          name: ulamaa-specific-language-transcripts
+          path: specific_language_transcripts
           if-no-files-found: error
           retention-days: 1
