@@ -12,265 +12,63 @@ jobs:
   extract:
     if: github.head_ref == 'tmp/ulamaa-playlist-transcripts-20260719'
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install extraction and transcription tools
+      - name: Fetch transcript API documents
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg
-          python -m pip install --upgrade pip
-          python -m pip install yt-dlp requests faster-whisper
-      - name: Extract via Piped and transcribe fallback audio
-        env:
-          PLAYLIST_URL: https://www.youtube.com/playlist?list=PLv6TZluNhDk5iw5N-FEXJ419yBLhLgJkp
-        run: |
-          cat > /tmp/extract_playlist.py <<'PY'
-          import csv
-          import html
-          import json
-          import os
-          import re
-          import subprocess
-          import sys
-          import time
+          python -m pip install requests
+          cat > /tmp/fetch.py <<'PY'
+          import json, time
           from pathlib import Path
-          from urllib.parse import urljoin
-
           import requests
 
-          PLAYLIST_URL = os.environ['PLAYLIST_URL']
-          OUT = Path('playlist_transcripts_v2')
-          RAW = OUT / 'raw'
-          TXT = OUT / 'transcripts'
-          AUDIO = OUT / 'audio_temp'
-          RAW.mkdir(parents=True, exist_ok=True)
-          TXT.mkdir(parents=True, exist_ok=True)
-          AUDIO.mkdir(parents=True, exist_ok=True)
-
-          INSTANCES = [
-              'https://pipedapi.kavin.rocks',
-              'https://pipedapi.adminforge.de',
-              'https://api.piped.projectsegfau.lt',
-              'https://pipedapi.r4fo.com',
-              'https://pipedapi.qdi.fi',
-              'https://pipedapi.pfcd.me',
-              'https://api.piped.privacydev.net',
-              'https://piped-api.garudalinux.org',
-              'https://pipedapi.syncpundit.io',
-              'https://pipedapi.moomoo.me',
+          videos = [
+            (1,'gNq70iuIQvs','L1 | Introduction to Nahwu'),
+            (2,'MQ8GC7Vgjek','L2 | Introduction to Nahwu'),
+            (3,'aJlycNt4Kqc','L3 | Introduction to Nahwu'),
+            (4,'sfS0-k6RVsY','L4 P1 | Introduction to Nahwu'),
+            (5,'KwvY8RxGP_A','L4 P2 | Introduction to Nahwu'),
+            (6,'oAfS4OOrBy0','L5 | Introduction to Nahwu'),
+            (7,'fZiH3U4thNk','L6 | Introduction to Nahwu'),
+            (8,'30BDuxItSg0','L7 | Introduction to Nahwu'),
+            (9,'Y9Mq5JIvOME','L8 | Introduction to Nahwu'),
           ]
-
-          session = requests.Session()
-          session.headers.update({'User-Agent': 'Mozilla/5.0 transcript-extractor/1.0'})
-
-          def run(cmd, timeout=1200):
-              print('+', ' '.join(cmd), flush=True)
-              return subprocess.run(cmd, text=True, capture_output=True, timeout=timeout)
-
-          def clean_caption(text):
-              lines = []
-              previous = None
-              for raw in text.splitlines():
-                  line = raw.strip().lstrip('\ufeff')
-                  if not line or line == 'WEBVTT' or line.startswith(('Kind:', 'Language:', 'NOTE', 'STYLE', 'REGION')):
-                      continue
-                  if re.match(r'^\d+$', line) or '-->' in line or line.startswith('X-TIMESTAMP-MAP'):
-                      continue
-                  line = re.sub(r'<[^>]+>', '', line)
-                  line = html.unescape(line)
-                  line = re.sub(r'\s+', ' ', line).strip()
-                  if not line or line == previous:
-                      continue
-                  previous = line
-                  lines.append(line)
-              return '\n'.join(lines)
-
-          def get_stream_info(video_id):
-              attempts = []
-              for base in INSTANCES:
-                  url = f'{base}/streams/{video_id}'
-                  try:
-                      r = session.get(url, timeout=25)
-                      attempts.append({'url': url, 'status': r.status_code, 'size': len(r.content)})
-                      if r.ok:
-                          data = r.json()
-                          if data.get('audioStreams') or data.get('subtitles'):
-                              return base, data, attempts
-                  except Exception as exc:
-                      attempts.append({'url': url, 'error': repr(exc)})
-              return None, None, attempts
-
-          def download(url, path, timeout=300):
-              with session.get(url, stream=True, timeout=timeout) as r:
-                  r.raise_for_status()
-                  with path.open('wb') as f:
-                      for chunk in r.iter_content(1024 * 1024):
-                          if chunk:
-                              f.write(chunk)
-              return path.stat().st_size
-
-          p = run(['yt-dlp', '--flat-playlist', '--dump-single-json', PLAYLIST_URL], timeout=600)
-          if p.returncode != 0:
-              print(p.stdout)
-              print(p.stderr, file=sys.stderr)
-              raise SystemExit('Could not read playlist')
-          playlist = json.loads(p.stdout)
-          entries = [e for e in (playlist.get('entries') or []) if e and e.get('id')]
-          (OUT / 'playlist.json').write_text(json.dumps(playlist, ensure_ascii=False, indent=2), encoding='utf-8')
-          print(f'Playlist: {playlist.get("title")} | videos={len(entries)}', flush=True)
-
-          whisper_model = None
-          manifest = []
-          failures = []
-
-          for idx, entry in enumerate(entries, 1):
-              vid = entry['id']
-              title = entry.get('title') or vid
-              url = f'https://www.youtube.com/watch?v={vid}'
-              prefix = f'{idx:03d}_{vid}'
-              print(f'\n[{idx}/{len(entries)}] {title}', flush=True)
-
-              base, data, attempts = get_stream_info(vid)
-              (RAW / f'{prefix}.piped_attempts.json').write_text(json.dumps(attempts, indent=2), encoding='utf-8')
-              if data:
-                  (RAW / f'{prefix}.piped.json').write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
-
-              transcript_parts = []
-              sources = []
-              method = None
-
-              # Prefer provided captions, including auto-generated captions.
-              if data:
-                  subtitles = data.get('subtitles') or []
-                  ranked = []
-                  for sub in subtitles:
-                      code = str(sub.get('code') or sub.get('languageCode') or '').lower()
-                      name = str(sub.get('name') or '').lower()
-                      score = 0
-                      if code.startswith('en') or 'english' in name:
-                          score += 100
-                      elif code.startswith('ar') or 'arabic' in name:
-                          score += 80
-                      if not sub.get('autoGenerated', False):
-                          score += 10
-                      ranked.append((score, sub))
-                  ranked.sort(key=lambda x: x[0], reverse=True)
-                  for _, sub in ranked[:3]:
-                      sub_url = sub.get('url')
-                      if not sub_url:
-                          continue
-                      if sub_url.startswith('/') and base:
-                          sub_url = urljoin(base, sub_url)
-                      try:
-                          code = str(sub.get('code') or sub.get('languageCode') or 'unknown')
-                          dest = RAW / f'{prefix}.{code}.caption'
-                          download(sub_url, dest, timeout=120)
-                          cleaned = clean_caption(dest.read_text(encoding='utf-8', errors='replace'))
-                          if cleaned:
-                              transcript_parts.append(f'[Caption language: {code}]\n{cleaned}')
-                              sources.append(f'Piped caption {code}')
-                              method = 'captions'
-                      except Exception as exc:
-                          failures.append({'index': idx, 'video_id': vid, 'stage': 'caption', 'error': repr(exc)})
-
-              # If captions are absent, download an audio-only stream and transcribe it.
-              if not transcript_parts and data and data.get('audioStreams'):
-                  streams = [s for s in data.get('audioStreams', []) if s.get('url')]
-                  streams.sort(key=lambda s: (s.get('bitrate') or 0), reverse=True)
-                  stream = streams[0] if streams else None
-                  if stream:
-                      audio_url = stream['url']
-                      if audio_url.startswith('/') and base:
-                          audio_url = urljoin(base, audio_url)
-                      ext = 'webm' if 'webm' in str(stream.get('mimeType', '')).lower() else 'm4a'
-                      audio_path = AUDIO / f'{prefix}.{ext}'
-                      try:
-                          size = download(audio_url, audio_path, timeout=900)
-                          print(f'Downloaded audio: {size} bytes', flush=True)
-                          if whisper_model is None:
-                              from faster_whisper import WhisperModel
-                              whisper_model = WhisperModel('base', device='cpu', compute_type='int8')
-                          segments, info = whisper_model.transcribe(
-                              str(audio_path),
-                              language='en',
-                              beam_size=5,
-                              vad_filter=True,
-                              condition_on_previous_text=True,
-                          )
-                          rows = []
-                          plain = []
-                          for seg in segments:
-                              text = re.sub(r'\s+', ' ', seg.text).strip()
-                              if not text:
-                                  continue
-                              plain.append(text)
-                              mm1, ss1 = divmod(int(seg.start), 60)
-                              mm2, ss2 = divmod(int(seg.end), 60)
-                              rows.append(f'[{mm1:02d}:{ss1:02d}-{mm2:02d}:{ss2:02d}] {text}')
-                          if plain:
-                              transcript_parts.append('[Whisper transcription]\n' + '\n'.join(rows))
-                              sources.append(f'faster-whisper base; detected={getattr(info, "language", "unknown")}')
-                              method = 'whisper'
-                      except Exception as exc:
-                          failures.append({'index': idx, 'video_id': vid, 'stage': 'audio_or_whisper', 'error': repr(exc)})
-                      finally:
-                          if audio_path.exists():
-                              audio_path.unlink()
-
-              transcript_path = TXT / f'{prefix}.txt'
-              header = [
-                  f'Lesson {idx}',
-                  f'Title: {title}',
-                  f'Video ID: {vid}',
-                  f'URL: {url}',
-                  f'Piped instance: {base or "none"}',
-                  '',
-              ]
-              if transcript_parts:
-                  transcript_path.write_text('\n'.join(header) + '\n\n'.join(transcript_parts), encoding='utf-8')
-                  status = 'transcript saved'
-              else:
-                  transcript_path.write_text('\n'.join(header) + '[NO TRANSCRIPT COULD BE RETRIEVED]\n', encoding='utf-8')
-                  status = 'missing transcript'
-
-              manifest.append({
-                  'index': idx,
-                  'video_id': vid,
-                  'title': title,
-                  'duration_seconds': entry.get('duration'),
-                  'url': url,
-                  'status': status,
-                  'method': method or '',
-                  'sources': '; '.join(sources),
-                  'transcript_file': transcript_path.name,
-              })
-
-          with (OUT / 'manifest.csv').open('w', newline='', encoding='utf-8') as f:
-              w = csv.DictWriter(f, fieldnames=list(manifest[0].keys()) if manifest else ['index'])
-              w.writeheader()
-              w.writerows(manifest)
-          (OUT / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
-          (OUT / 'failures.json').write_text(json.dumps(failures, ensure_ascii=False, indent=2), encoding='utf-8')
-          summary = {
-              'playlist_title': playlist.get('title'),
-              'uploader': playlist.get('uploader'),
-              'video_count': len(entries),
-              'transcripts_saved': sum(m['status'] == 'transcript saved' for m in manifest),
-              'missing_transcripts': sum(m['status'] == 'missing transcript' for m in manifest),
-              'methods': {m: sum(x['method'] == m for x in manifest) for m in ['captions', 'whisper', '']},
-          }
-          (OUT / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
-          print(json.dumps(summary, ensure_ascii=False, indent=2))
+          out=Path('transcript_api_results'); out.mkdir(exist_ok=True)
+          s=requests.Session(); s.headers['User-Agent']='Mozilla/5.0'
+          results=[]
+          for i,vid,title in videos:
+            urls=[
+              f'https://youtube-transcript.ai/transcript/{vid}.txt',
+              f'https://youtube-transcript.ai/transcript/{vid}.txt?lang=en',
+            ]
+            best=None
+            attempts=[]
+            for url in urls:
+              try:
+                r=s.get(url,timeout=180)
+                attempts.append({'url':url,'status':r.status_code,'size':len(r.content),'type':r.headers.get('content-type'),'preview':r.text[:300]})
+                if r.ok and len(r.text)>300 and 'error' not in r.text[:200].lower():
+                  best=r.text
+                  break
+              except Exception as e:
+                attempts.append({'url':url,'error':repr(e)})
+              time.sleep(2)
+            (out/f'{i:03d}_{vid}_attempts.json').write_text(json.dumps(attempts,ensure_ascii=False,indent=2),encoding='utf-8')
+            if best:
+              (out/f'{i:03d}_{vid}.txt').write_text(best,encoding='utf-8')
+            results.append({'index':i,'video_id':vid,'title':title,'success':bool(best),'chars':len(best or '')})
+          (out/'summary.json').write_text(json.dumps(results,ensure_ascii=False,indent=2),encoding='utf-8')
+          print(json.dumps(results,ensure_ascii=False,indent=2))
           PY
-          python /tmp/extract_playlist.py
-      - name: Upload transcript package
+          python /tmp/fetch.py
+      - name: Upload results
         uses: actions/upload-artifact@v4
         with:
-          name: ulamaa-playlist-transcripts-v2
-          path: playlist_transcripts_v2
+          name: ulamaa-transcript-api-results
+          path: transcript_api_results
           if-no-files-found: error
           retention-days: 1
